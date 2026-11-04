@@ -46,6 +46,9 @@ import {
   Download,
   ExternalLink,
   Loader2,
+  Mic,
+  Instagram,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +65,14 @@ import { notifySprintCardMention } from "@/services/notificationService";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import {
+  extractCriafyTarget,
+  dispatchSprintCardToCriafy,
+  findCardMediaAttachment,
+} from "@/services/criafy/sprintCriafyBridge";
+import { SprintCriafyScheduleModal } from "./SprintCriafyScheduleModal";
+import { SprintAudioRecorder } from "./SprintAudioRecorder";
+import { toast } from "sonner";
 
 
 interface ChecklistTitleEditorProps {
@@ -829,7 +840,16 @@ export const SprintCardModal: React.FC = () => {
   const [isCardFilesOpen, setIsCardFilesOpen] = useState(false);
   const [selectedCommentFile, setSelectedCommentFile] = useState<File | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isAudioRecorderOpen, setIsAudioRecorderOpen] = useState(false);
+  const [isCriafyScheduleModalOpen, setIsCriafyScheduleModalOpen] = useState(false);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Detecção inteligente de menções para o Criafy (@criafy/reels, stories, post, carrossel)
+  const criafyFormat = useMemo(() => {
+    if (!activeCard) return null;
+    const textToScan = `${activeCard.title || ""} ${activeCard.description || ""}`;
+    return extractCriafyTarget(textToScan);
+  }, [activeCard?.title, activeCard?.description]);
 
   const allCardAttachments = useMemo(() => {
     const list: any[] = [];
@@ -1019,6 +1039,46 @@ export const SprintCardModal: React.FC = () => {
     }
   };
 
+  const handleToggleComplete = async () => {
+    if (!activeCard) return;
+    const nextCompleted = !activeCard.is_completed;
+    await updateCard(activeCard.id, { is_completed: nextCompleted });
+
+    // Se está marcando como concluído e possui vínculo com o Criafy (@criafy/reels, stories, etc)
+    if (nextCompleted && criafyFormat) {
+      const companyId = activeCard.company_id || currentBoard?.company_id;
+      if (!companyId) return;
+
+      // 1. Se tem data e hora previamente definidas -> Agenda automaticamente sem atrito!
+      if (activeCard.due_date) {
+        try {
+          const media = findCardMediaAttachment(activeCard);
+          await dispatchSprintCardToCriafy({
+            companyId,
+            card: activeCard,
+            mediaUrl: media?.url,
+            scheduledAt: activeCard.due_date,
+            targetFormat: criafyFormat,
+          });
+
+          toast.success(
+            `🚀 Demanda concluída! Post (${criafyFormat}) agendado no Criafy para ${format(
+              new Date(activeCard.due_date),
+              "dd/MM/yyyy 'às' HH:mm",
+              { locale: ptBR }
+            )}!`
+          );
+        } catch (err: any) {
+          console.error("Erro ao agendar automaticamente no Criafy:", err);
+          toast.error(err.message || "Erro ao agendar no Criafy. Abra o agendador manual.");
+        }
+      } else {
+        // 2. Não possui data/hora prévia -> Abre modal do Criafy na hora para escolher horário ou salvar rascunho!
+        setIsCriafyScheduleModalOpen(true);
+      }
+    }
+  };
+
   return (
     <>
       <Dialog open={!!activeCardId} onOpenChange={(open) => !open && closeCardModal()}>
@@ -1072,6 +1132,64 @@ export const SprintCardModal: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4">
           {/* Coluna Principal */}
           <div className="md:col-span-3 space-y-6">
+            {/* Banner de Integração Criafy (@criafy/...) */}
+            {criafyFormat && (
+              <div className="p-3.5 rounded-xl border border-pink-500/30 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-transparent flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-600 to-purple-600 flex items-center justify-center text-white shadow-xs shrink-0">
+                    <Instagram className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-xs text-foreground">Destino: Criafy · Instagram</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-600 dark:text-pink-400 font-mono">
+                        {criafyFormat}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {activeCard.due_date
+                        ? `📅 Publicação agendada automaticamente para ${format(new Date(activeCard.due_date), "dd/MM 'às' HH:mm", { locale: ptBR })} ao concluir a demanda.`
+                        : "Ao concluir esta demanda, o agendamento no Criafy será solicitado na hora."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAudioRecorderOpen((prev) => !prev)}
+                    className="h-7 text-xs gap-1.5 border-pink-500/30 text-pink-600 dark:text-pink-400 hover:bg-pink-500/10"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                    <span>Gravar Áudio</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setIsCriafyScheduleModalOpen(true)}
+                    className="h-7 text-xs gap-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white shadow-xs"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>{activeCard.is_completed ? "Reagendar / Criafy" : "Agendar no Criafy"}</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Gravador de Áudio Embutido */}
+            {isAudioRecorderOpen && (
+              <SprintAudioRecorder
+                cardId={activeCard.id}
+                boardId={activeCard.board_id}
+                companyId={activeCard.company_id}
+                onSuccess={() => setIsAudioRecorderOpen(false)}
+                onCancel={() => setIsAudioRecorderOpen(false)}
+              />
+            )}
+
             {/* Metadados: Etiquetas, Membros e Prazo */}
             <div className="flex flex-wrap items-center gap-6">
               {/* Etiquetas */}
@@ -1120,29 +1238,32 @@ export const SprintCardModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Prazo de Entrega */}
-              {activeCard.due_date && (
-                <div>
-                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Data de Entrega
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateCard(activeCard.id, { is_completed: !activeCard.is_completed })}
-                      className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer",
-                        activeCard.is_completed
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600"
-                          : "bg-secondary border-border text-foreground hover:bg-secondary/80"
-                      )}
-                    >
-                      <CheckCircle2 className={cn("h-4 w-4", activeCard.is_completed ? "text-emerald-500" : "text-muted-foreground")} />
+              {/* Prazo de Entrega ou Status de Conclusão */}
+              <div>
+                <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  {activeCard.due_date ? "Data de Entrega" : "Status da Demanda"}
+                </h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleToggleComplete}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer",
+                      activeCard.is_completed
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 font-semibold"
+                        : "bg-secondary border-border text-foreground hover:bg-secondary/80"
+                    )}
+                    title={activeCard.is_completed ? "Clique para reabrir" : "Clique para concluir atividade"}
+                  >
+                    <CheckCircle2 className={cn("h-4 w-4", activeCard.is_completed ? "text-emerald-500" : "text-muted-foreground")} />
+                    {activeCard.due_date ? (
                       <span>{format(new Date(activeCard.due_date), "dd 'de' MMM, HH:mm", { locale: ptBR })}</span>
-                      {activeCard.is_completed && <span className="text-[10px] font-bold uppercase">(Concluído)</span>}
-                    </button>
-                  </div>
+                    ) : (
+                      <span>{activeCard.is_completed ? "Concluída" : "Marcar como Concluída"}</span>
+                    )}
+                    {activeCard.is_completed && <span className="text-[10px] font-bold uppercase">(Concluído)</span>}
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Descrição */}
@@ -1497,6 +1618,35 @@ export const SprintCardModal: React.FC = () => {
                 </Button>
               )}
 
+              {/* Gravar Áudio */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAudioRecorderOpen((prev) => !prev)}
+                className={cn(
+                  "w-full justify-start gap-2 text-xs h-8 transition-colors",
+                  isAudioRecorderOpen && "border-pink-500 text-pink-600 bg-pink-500/10"
+                )}
+                title="Gravar áudio com microfone diretamente para esta demanda"
+              >
+                <Mic className="h-3.5 w-3.5 text-pink-500" />
+                <span>Gravar Áudio</span>
+              </Button>
+
+              {/* Agendar no Criafy */}
+              {criafyFormat && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCriafyScheduleModalOpen(true)}
+                  className="w-full justify-start gap-2 text-xs h-8 border-pink-500/30 text-pink-600 dark:text-pink-400 hover:bg-pink-500/10"
+                  title="Agendar publicação oficial no Criafy"
+                >
+                  <Instagram className="h-3.5 w-3.5 text-pink-500" />
+                  <span>Agendar Criafy</span>
+                </Button>
+              )}
+
               {/* Datas */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -1561,6 +1711,20 @@ export const SprintCardModal: React.FC = () => {
           title="Arquivos do Cartão"
           subtitle={activeCard.title}
           attachments={allCardAttachments}
+        />
+      )}
+
+      {/* Modal de Agendamento Criafy */}
+      {activeCard && isCriafyScheduleModalOpen && (
+        <SprintCriafyScheduleModal
+          isOpen={isCriafyScheduleModalOpen}
+          onClose={() => setIsCriafyScheduleModalOpen(false)}
+          card={activeCard}
+          companyId={activeCard.company_id || ""}
+          targetFormat={criafyFormat || "REELS"}
+          onSuccess={() => {
+            setIsCriafyScheduleModalOpen(false);
+          }}
         />
       )}
     </>

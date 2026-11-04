@@ -13,6 +13,8 @@ import {
   List,
   ListOrdered,
   AtSign,
+  Instagram,
+  Sparkles,
 } from "lucide-react";
 
 interface SprintMentionTextareaProps {
@@ -104,6 +106,40 @@ export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
       return name.includes(q) || email.includes(q);
     });
   }, [mentionQuery, memberList]);
+
+  const CRIAFY_APP_MENTIONS = [
+    { id: "app-criafy-reels", tag: "criafy/reels", label: "@criafy/reels", title: "Instagram Reels", desc: "Formato Reels para o Criafy" },
+    { id: "app-criafy-stories", tag: "criafy/stories", label: "@criafy/stories", title: "Instagram Stories", desc: "Formato Stories para o Criafy" },
+    { id: "app-criafy-post", tag: "criafy/post", label: "@criafy/post", title: "Instagram Feed", desc: "Publicação no feed para o Criafy" },
+    { id: "app-criafy-carrossel", tag: "criafy/carrossel", label: "@criafy/carrossel", title: "Instagram Carrossel", desc: "Carrossel de imagens no Criafy" },
+  ];
+
+  const filteredApps = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    if (!q) return CRIAFY_APP_MENTIONS;
+    return CRIAFY_APP_MENTIONS.filter(
+      (a) => a.tag.includes(q) || a.title.toLowerCase().includes(q) || "criafy".includes(q)
+    );
+  }, [mentionQuery]);
+
+  const selectAppTag = (tag: string) => {
+    if (mentionIndex === null) return;
+    const before = value.slice(0, mentionIndex);
+    const after = value.slice(mentionIndex + 1 + (mentionQuery?.length || 0));
+    const newValue = `${before}@${tag} ${after}`;
+
+    onChange(newValue);
+    setMentionQuery(null);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const nextPos = before.length + tag.length + 2;
+        textareaRef.current.setSelectionRange(nextPos, nextPos);
+      }
+    }, 50);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -316,8 +352,44 @@ export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
       {mentionQuery !== null && (
         <div
           ref={dropdownRef}
-          className="absolute left-0 bottom-full mb-1.5 z-[9999] w-72 max-h-60 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100"
+          className="absolute left-0 bottom-full mb-1.5 z-[9999] w-80 max-h-72 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100"
         >
+          {/* Seção Destinos Criafy */}
+          {filteredApps.length > 0 && (
+            <div className="mb-2 pb-1.5 border-b border-border/60">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] uppercase font-bold tracking-wider text-pink-600 dark:text-pink-400">
+                <Instagram className="h-3 w-3" />
+                <span>Destinos Criafy (Instagram)</span>
+              </div>
+              <div className="space-y-0.5 mt-1">
+                {filteredApps.map((app) => (
+                  <button
+                    key={app.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectAppTag(app.tag);
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs hover:bg-pink-500/10 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono font-semibold text-[11px] text-pink-600 dark:text-pink-400 bg-pink-500/10 px-1.5 py-0.5 rounded">
+                        {app.label}
+                      </span>
+                      <span className="text-[11px] text-foreground/90 font-medium truncate">
+                        {app.title}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground group-hover:text-pink-600 dark:group-hover:text-pink-400">
+                      Inserir
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Seção Membros */}
           <div className="flex items-center justify-between px-2.5 py-1.5 text-[10px] uppercase font-bold tracking-wider text-muted-foreground border-b border-border/50 mb-1">
             <span className="flex items-center gap-1.5">
               <UserCheck className="h-3 w-3 text-primary" />
@@ -326,9 +398,9 @@ export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
             <span>{filteredMembers.length} disponível(is)</span>
           </div>
 
-          {filteredMembers.length === 0 ? (
+          {filteredMembers.length === 0 && filteredApps.length === 0 ? (
             <div className="p-3 text-center text-xs text-muted-foreground">
-              Nenhum membro encontrado para "{mentionQuery}"
+              Nenhuma menção encontrada para "{mentionQuery}"
             </div>
           ) : (
             filteredMembers.map((member, idx) => {

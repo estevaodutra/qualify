@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 import { useAuth } from "@/contexts/AuthContext";
+import { Instagram } from "lucide-react";
 
 interface SprintMentionRendererProps {
   text: string;
@@ -64,6 +65,9 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
     if (sorted.length > 0) {
       patterns.push(sorted.map(makeCaseInsensitivePattern).join("|"));
     }
+
+    // Padrão Criafy Apps: @criafy/reels, @criafy/stories, @criafy/post, @criafy/carrossel, @criafy
+    patterns.push(`criafy(?:\\/[\\w-]+)?`);
 
     // Fallback: Nomes compostos com iniciais maiúsculas (ex: @Carlos Silva)
     patterns.push(`[A-ZÀ-Ý][a-zà-ÿ0-9_.-]+(?:\\s+[A-ZÀ-Ý][a-zà-ÿ0-9_.-]+)+`);
@@ -150,20 +154,43 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
           </a>
         );
       } else if (match[3]) {
-        // Menção: @Nome
-        elements.push(
-          <span
-            key={`${keyPrefix}-men-${tokenIdx++}`}
-            className={cn(
-              "inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md text-[11px] font-medium border transition-colors select-none align-baseline",
-              isCompleted
-                ? "bg-blue-500/10 text-blue-400/80 border-blue-500/20 line-through opacity-75"
-                : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20 shadow-2xs"
-            )}
-          >
-            {match[3]}
-          </span>
-        );
+        // Menção: @Nome ou @criafy/...
+        const mentionText = match[3];
+        const isCriafy = /^@criafy(\/[\w-]+)?/i.test(mentionText);
+
+        if (isCriafy) {
+          const sub = mentionText.split("/")[1] || "Instagram";
+          const subLabel = sub.charAt(0).toUpperCase() + sub.slice(1).toLowerCase();
+          elements.push(
+            <span
+              key={`${keyPrefix}-criafy-${tokenIdx++}`}
+              className={cn(
+                "inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded-md text-[10px] font-bold border transition-all select-none align-baseline",
+                isCompleted
+                  ? "bg-pink-500/10 text-pink-400 border-pink-500/20 line-through opacity-75"
+                  : "bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-amber-500/15 text-pink-600 dark:text-pink-400 border-pink-500/30 hover:border-pink-500/50 shadow-2xs"
+              )}
+              title="Destino automatizado para o Criafy"
+            >
+              <Instagram className="w-3 h-3 text-pink-500 inline shrink-0" />
+              <span>Criafy · {subLabel}</span>
+            </span>
+          );
+        } else {
+          elements.push(
+            <span
+              key={`${keyPrefix}-men-${tokenIdx++}`}
+              className={cn(
+                "inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md text-[11px] font-medium border transition-colors select-none align-baseline",
+                isCompleted
+                  ? "bg-blue-500/10 text-blue-400/80 border-blue-500/20 line-through opacity-75"
+                  : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20 shadow-2xs"
+              )}
+            >
+              {mentionText}
+            </span>
+          );
+        }
       } else if (match[4]) {
         // Negrito: *texto*
         elements.push(
