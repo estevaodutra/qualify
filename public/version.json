@@ -1,6 +1,6 @@
 {
-  "commit": "91d55f6350ae1b5245de1f2ebec5fc8709bf9c0c",
-  "shortCommit": "91d55f6",
-  "message": "fix(criafy): handle oauth popup callback immediately before company context load",
-  "builtAt": "2026-11-04T13:23:58.616Z"
+  "commit": "4e582252ed8b60ab9780721477efa1b57394fcbb",
+  "shortCommit": "4e58225",
+  "message": "feat(superadmin): add exclusive API4COM integration panel in superadmin",
+  "builtAt": "2026-11-04T13:31:08.426Z"
 }
