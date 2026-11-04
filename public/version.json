@@ -1,6 +1,6 @@
 {
-  "commit": "4e582252ed8b60ab9780721477efa1b57394fcbb",
-  "shortCommit": "4e58225",
-  "message": "feat(superadmin): add exclusive API4COM integration panel in superadmin",
-  "builtAt": "2026-11-04T13:31:08.426Z"
+  "commit": "d6a6fc4218e0412dec11127783ee2a28b48585f0",
+  "shortCommit": "d6a6fc4",
+  "message": "fix(superadmin): fix PhoneCall import from lucide-react in AdminSidebar",
+  "builtAt": "2026-11-04T13:53:13.747Z"
 }
