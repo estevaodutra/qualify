@@ -513,16 +513,11 @@ export default function InboxList({
     <div className="w-full h-full flex flex-col overflow-hidden bg-card/20 border-r border-border/40 select-none">
       {/* 1. Header Toolbar */}
       <div className="p-4 pb-3 border-b border-border/30 space-y-3 shrink-0 bg-background/50 backdrop-blur-xs">
-        {/* Brand Row: [Logo] Qualify */}
+        {/* Title Row: Caixa de Entrada + Top Actions */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-xs">
-              <MessageSquare className="h-4 w-4 fill-current" />
-            </div>
-            <span className="font-extrabold text-base tracking-tight text-primary">
-              Qualify
-            </span>
-          </div>
+          <h2 className="text-xl font-extrabold tracking-tight text-primary">
+            Caixa de Entrada
+          </h2>
 
           <div className="flex items-center gap-1">
             {/* Filter Drawer Toggle */}
@@ -579,11 +574,6 @@ export default function InboxList({
             </DropdownMenu>
           </div>
         </div>
-
-        {/* Title: Caixa de Entrada */}
-        <h2 className="text-xl font-extrabold tracking-tight text-primary">
-          Caixa de Entrada
-        </h2>
 
         {/* Search Bar */}
         <div className="relative">
