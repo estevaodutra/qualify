@@ -1,6 +1,6 @@
 {
-  "commit": "d5d6e362360d72b5fb834a20be672ceee5c6a3bf",
-  "shortCommit": "d5d6e36",
-  "message": "fix(workflows): automatically filter target workflows by 'Outra automação' trigger without toggle switch",
-  "builtAt": "2026-11-05T17:45:44.511Z"
+  "commit": "9032679c577ccbecaf4818feb08b2fd0e06729e8",
+  "shortCommit": "9032679",
+  "message": "fix(crm): persist and restore last active pipeline on navigation and from url",
+  "builtAt": "2026-11-05T17:54:39.676Z"
 }

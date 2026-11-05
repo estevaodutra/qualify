@@ -28,7 +28,14 @@ export default function Pipelines() {
   const [activePipelineId, setActivePipelineId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get("pipelineId");
+      const urlPipelineId = urlParams.get("pipelineId");
+      if (urlPipelineId) return urlPipelineId;
+
+      const compId = localStorage.getItem("qualify_active_company_v2");
+      if (compId) {
+        const stored = localStorage.getItem(`qualify-active-pipeline:${compId}`);
+        if (stored) return stored;
+      }
     }
     return null;
   });
