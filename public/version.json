@@ -1,6 +1,6 @@
 {
-  "commit": "851bd7ea237dc298e03bf924f17dc8812c93d337",
-  "shortCommit": "851bd7e",
-  "message": "feat(api4com): integracao nativa completa e provisionamento automatico de usuarios e ramais sem n8n",
-  "builtAt": "2026-11-05T23:27:26.395Z"
+  "commit": "f12bec3f58537aad3a87b560eecb155b86ae662f",
+  "shortCommit": "f12bec3",
+  "message": "feat(api4com): provisionar e salvar tokens e ramais perpétuos para todos os 7 usuários",
+  "builtAt": "2026-11-05T23:50:31.612Z"
 }

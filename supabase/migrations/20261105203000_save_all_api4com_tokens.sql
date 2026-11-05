@@ -1,12 +1,12 @@
--- Migration: Save API4COM Tokens and Extensions for all existing users
--- Ensures all 7 platform users have active tokens and assigned SIP extensions
+-- Migration: Save API4COM Tokens, Extensions and exact SIP Pulse Passwords for all existing users
+-- Ensures all 7 platform users have active tokens and authenticating SIP credentials
 
 UPDATE public.profiles
 SET
   api4com_token = 'fSENJOSmNIi6FzGKLZcCr2SBSAuzlAcaLxoiXySZi09QJpwMYvFkg595g9j8wt5T',
   api4com_extension = '1007',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = '2j1nyg6r',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'percursodavida@gmail.com';
 
@@ -15,7 +15,7 @@ SET
   api4com_token = 'LAGQib0NXaNk3m9Ia46tFGkxQnaDcCEw2B7fGstVvLAORBSOIH2ElmPzhFhcVaIS',
   api4com_extension = '1008',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = 'n0xddp48',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'flavia.bortolazo@gmail.com';
 
@@ -24,7 +24,7 @@ SET
   api4com_token = 'Q2VgGr6VIY2wzvayFlliLRIBX8av8xLGVaS52nRFq1sfChuvp6u3LVuSvLzzJEEX',
   api4com_extension = '1009',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = 'sa6c2ceb',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'fla_bortolazo@hotmail.com';
 
@@ -33,7 +33,7 @@ SET
   api4com_token = 'QO45gsVOywSoI5e6hfnZToB5kAu6TI1Cax6Hio9JDslHp1BlHCJ07c2CeNKt0FPi',
   api4com_extension = '1010',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = 'dqny9bxk',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'pablosantanasantos@gmail.com';
 
@@ -42,7 +42,7 @@ SET
   api4com_token = 'Yoj5Dzz8PfeUFDE693zUqLtStF5L6vx19lD5JT4Hcl0dCXcCW9FAehGKv4CXje6U',
   api4com_extension = '1003',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = '3cvh1kdk',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'maurodutra3@gmail.com';
 
@@ -51,7 +51,7 @@ SET
   api4com_token = 'gVmB296Z0xkuz72fDEbjgHItErKiLZIHnsGL52d7sZ3yfAZUSYs4Jyx3lJoET0I4',
   api4com_extension = '1011',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = 'g9njjynd',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'qualifys.app@gmail.com';
 
@@ -60,11 +60,11 @@ SET
   api4com_token = 'Ul0loTUVUhENQrHoTYI2Bs87hHxHCnNeTLHG2ibFDrduZTpKPiUZFRgiZYYYAL4A',
   api4com_extension = '1002',
   api4com_domain = 'd2x.api4com.com',
-  api4com_password = 'carvalho159',
+  api4com_password = 'ccp8csoc',
   api4com_synced_at = NOW()
 WHERE lower(email) = 'estevaodutra.pmss@gmail.com';
 
--- Sync call_operators table for any operator records corresponding to these users
+-- Sync call_operators table with the exact SIP passwords
 UPDATE public.call_operators co
 SET
   api4com_token = p.api4com_token,

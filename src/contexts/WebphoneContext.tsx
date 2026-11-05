@@ -82,21 +82,62 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .maybeSingle();
 
       if (!error && data) {
-        // Se call_operators não tem token, busca do profile como fallback
-        if (!data.api4com_token) {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("api4com_token, api4com_extension, api4com_domain, api4com_password")
-            .eq("id", user.id)
-            .maybeSingle();
+        // Sincroniza com o perfil do usuário para garantir as credenciais mais recentes
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("api4com_token, api4com_extension, api4com_domain, api4com_password")
+          .eq("id", user.id)
+          .maybeSingle();
 
-          if (prof?.api4com_token) {
-            data.api4com_token = prof.api4com_token;
-            if (!data.extension && prof.api4com_extension) data.extension = prof.api4com_extension;
-            if (!data.sip_domain && prof.api4com_domain) data.sip_domain = prof.api4com_domain;
-            if (!data.sip_password && prof.api4com_password) data.sip_password = prof.api4com_password;
+        if (prof) {
+          if (prof.api4com_token) data.api4com_token = prof.api4com_token;
+          if (prof.api4com_extension) data.extension = prof.api4com_extension;
+          if (prof.api4com_domain) data.sip_domain = prof.api4com_domain;
+          if (prof.api4com_password) data.sip_password = prof.api4com_password;
+        }
+
+        // Se tem token mas a senha SIP estiver ausente, recupera diretamente da API4COM
+        if (data.api4com_token && (!data.sip_password || !data.extension)) {
+          try {
+            const sippulseRes = await fetch(
+              "https://api.api4com.com/api/v1/integrations?filter[where][gateway]=sippulse",
+              { headers: { Authorization: data.api4com_token } }
+            );
+            if (sippulseRes.ok) {
+              const list = await sippulseRes.json();
+              if (Array.isArray(list) && list.length > 0 && list[0]?.metadata) {
+                const meta = list[0].metadata;
+                data.extension = String(meta.username || data.extension || "");
+                data.sip_domain = String(meta.domain || data.sip_domain || "d2x.api4com.com");
+                data.sip_password = String(meta.password || "");
+
+                // Salva no perfil e no operador em background
+                supabase
+                  .from("profiles")
+                  .update({
+                    api4com_extension: data.extension,
+                    api4com_domain: data.sip_domain,
+                    api4com_password: data.sip_password,
+                  })
+                  .eq("id", user.id)
+                  .catch(console.warn);
+
+                supabase
+                  .from("call_operators")
+                  .update({
+                    extension: data.extension,
+                    sip_domain: data.sip_domain,
+                    sip_password: data.sip_password,
+                  })
+                  .eq("id", data.id)
+                  .catch(console.warn);
+              }
+            }
+          } catch (sipFetchErr) {
+            console.warn("[WebphoneContext] Aviso ao buscar SIP dinâmico:", sipFetchErr);
           }
         }
+
         setOperator(data);
       } else if (!data) {
         // Se ainda não existe call_operators, verifica se o usuário possui token no perfil
@@ -202,6 +243,14 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } catch {}
       }
 
+      // Timeout de segurança para evitar loop infinito
+      const registrationTimeout = setTimeout(() => {
+        console.warn("[Webphone] Timeout aguardando registro SIP");
+        setStatus("error");
+        setIsOnline(false);
+        setErrorMessage("Tempo limite esgotado ao registrar no servidor SIP. Verifique a conexão com a internet.");
+      }, 12000);
+
       const instanceId = `instance_${operator.id.slice(0, 8)}_${Date.now()}`;
 
       const wp = new window.libwebphone({
@@ -235,6 +284,7 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Eventos SIP
       wp.on("registered", () => {
+        clearTimeout(registrationTimeout);
         console.log("[Webphone] SIP Registrado com sucesso!");
         setStatus("connected");
         setIsOnline(true);
@@ -242,12 +292,14 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
 
       wp.on("unregistered", () => {
+        clearTimeout(registrationTimeout);
         console.log("[Webphone] SIP Desregistrado");
         setStatus("disconnected");
         setIsOnline(false);
       });
 
       wp.on("registrationFailed", (data: any) => {
+        clearTimeout(registrationTimeout);
         console.error("[Webphone] Falha no registro SIP:", data);
         setStatus("error");
         setIsOnline(false);
