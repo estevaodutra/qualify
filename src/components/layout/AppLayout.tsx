@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { AppHeader } from "./AppHeader";
 import { InstanceStatusBanner } from "./InstanceStatusBanner";
 import { ImpersonationBanner } from "../admin/ImpersonationBanner";
 import { useCallQueue } from "@/hooks/useCallQueue";
@@ -79,12 +78,15 @@ export function AppLayout({ children }: AppLayoutProps) {
       window.clearTimeout(blurTimer);
       window.clearTimeout(settleTimer);
       blurTimer = window.setTimeout(scheduleSync, 120);
-      settleTimer = window.setTimeout(() => {
-        scheduleSync();
-        if (window.location.pathname.startsWith("/chat") && window.scrollY > 0) {
-          window.scrollTo(0, 0);
-        }
-      }, 350);
+      settleTimer = window.setTimeout(
+        () => {
+          scheduleSync();
+          if (window.location.pathname.startsWith("/chat") && window.scrollY > 0) {
+            window.scrollTo(0, 0);
+          }
+        },
+        350,
+      );
     };
     const handleOrientationChange = () => {
       expandedHeight = window.innerHeight;
@@ -106,8 +108,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       viewport?.removeEventListener("scroll", scheduleSync);
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("orientationchange", handleOrientationChange);
-      document.removeEventListener("focusin", scheduleSync);
-      document.removeEventListener("focusout", handleBlur);
+      document.addEventListener("focusin", scheduleSync);
+      document.addEventListener("focusout", handleBlur);
     };
   }, []);
 
@@ -124,7 +126,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         <div className={`relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden ${isQuizEditor ? "" : `pt-[max(env(safe-area-inset-top),32px)] ${chatKeyboardOpen ? "pb-0" : "pb-[calc(64px+env(safe-area-inset-bottom))]"} md:pt-0 md:pb-0`}`}>
           <ImpersonationBanner />
-          {!isQuizEditor && <AppHeader />}
           {!isQuizEditor && <InstanceStatusBanner />}
           <NotificationPopupManager />
           <main className={
