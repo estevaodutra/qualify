@@ -247,11 +247,12 @@ export function useCallLeads(campaignId: string, statusFilter?: CallLeadStatus) 
           email: lead.email || null,
           custom_fields: lead.customFields || {},
           active_campaign_id: campaignId,
+          company_id: activeCompanyId,
           active_campaign_type: "ligacao",
           source_type: "campaign_manual",
           source_campaign_id: campaignId,
           source_name: camp?.name ?? null,
-        }, { onConflict: "user_id,phone" });
+        }, { onConflict: "company_id,phone" });
       } catch (e) {
         console.warn("[addLead] failed to mirror to leads table:", e);
       }
@@ -313,12 +314,13 @@ export function useCallLeads(campaignId: string, statusFilter?: CallLeadStatus) 
           email: lead.email || null,
           custom_fields: lead.customFields || {},
           active_campaign_id: campaignId,
+          company_id: activeCompanyId,
           active_campaign_type: "ligacao",
           source_type: "campaign_manual",
           source_campaign_id: campaignId,
           source_name: campaignName,
         }));
-        await safeBatchUpsert("leads", leadsRows, "user_id,phone");
+        await safeBatchUpsert("leads", leadsRows, "company_id,phone");
       } catch (e) {
         console.warn("[addLeadsBatch] failed to mirror to leads table:", e);
       }

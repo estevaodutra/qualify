@@ -156,7 +156,7 @@ export function useURALeads(campaignId: string, statusFilter?: URALeadStatus) {
           source_type: "campaign_manual",
           source_campaign_id: campaignId,
           source_name: campaignName,
-        }, { onConflict: "user_id,phone" });
+        }, { onConflict: "company_id,phone" });
       } catch (e) {
         console.warn("[addLead] failed to mirror to leads table:", e);
       }
@@ -213,6 +213,7 @@ export function useURALeads(campaignId: string, statusFilter?: URALeadStatus) {
         const campaignName = camp?.name ?? null;
 
         const leadsRows = leadsData.map((lead) => ({
+          company_id: activeCompanyId,
           user_id: user.id,
           phone: lead.phone,
           name: lead.name || null,
@@ -225,7 +226,7 @@ export function useURALeads(campaignId: string, statusFilter?: URALeadStatus) {
           source_name: campaignName,
         }));
 
-        await safeBatchUpsert("leads", leadsRows, "user_id,phone");
+        await safeBatchUpsert("leads", leadsRows, "company_id,phone");
       } catch (e) {
         console.warn("[addLeadsBatch] failed to mirror to leads table:", e);
       }

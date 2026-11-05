@@ -1,6 +1,6 @@
 {
-  "commit": "9032679c577ccbecaf4818feb08b2fd0e06729e8",
-  "shortCommit": "9032679",
-  "message": "fix(crm): persist and restore last active pipeline on navigation and from url",
-  "builtAt": "2026-11-05T17:54:39.676Z"
+  "commit": "1a71f02c9f4a1a14ab99a278c0d5e48842d46e88",
+  "shortCommit": "1a71f02",
+  "message": "fix(chat): remove qualify logo and brand from inbox list header",
+  "builtAt": "2026-11-05T22:42:13.745Z"
 }

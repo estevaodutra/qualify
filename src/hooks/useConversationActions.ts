@@ -338,7 +338,7 @@ export function useConversationActions() {
               name: cleanName,
               status: "active",
             },
-            { onConflict: "user_id, phone" }
+            { onConflict: "company_id, phone" }
           )
           .select("id")
           .single();
@@ -348,7 +348,7 @@ export function useConversationActions() {
           const { data: fallbackLead } = await supabase
             .from("leads")
             .select("id")
-            .eq("user_id", user.id)
+            .eq("company_id", activeCompanyId)
             .eq("phone", digitsOnly || cleanPhone)
             .maybeSingle();
 
