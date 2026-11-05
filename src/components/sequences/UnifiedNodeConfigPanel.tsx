@@ -3093,12 +3093,6 @@ export function UnifiedNodeConfigPanel({
 
           {/* TRIGGER_WORKFLOW - Ativar outro fluxo */}
           {node.nodeType === "trigger_workflow" && (() => {
-            const onlyActionTrigger = currentConfig.onlyActionTrigger !== undefined
-              ? Boolean(currentConfig.onlyActionTrigger)
-              : true;
-
-            const actionTriggerWorkflowsCount = workflows.filter((w) => isActionTriggerWorkflow(w)).length;
-
             const filteredWorkflows = workflows.filter((w) => {
               const isCurrentlySelected = 
                 w.id === currentConfig.targetWorkflowId || 
@@ -3107,7 +3101,6 @@ export function UnifiedNodeConfigPanel({
                 w.sourceId === currentConfig.workflowId ||
                 w.id === currentConfig.sequenceId ||
                 w.sourceId === currentConfig.sequenceId;
-              if (!onlyActionTrigger) return true;
               return isCurrentlySelected || isActionTriggerWorkflow(w);
             });
 
@@ -3128,27 +3121,6 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-emerald-700/90 leading-relaxed">
                     Quando o contato chegar neste bloco, a automação selecionada abaixo será iniciada para ele, repassando o contato, variáveis e histórico.
                   </p>
-                </div>
-
-                {/* Opção para filtrar apenas fluxos com gatilho "Outra automação" */}
-                <div className="flex items-center justify-between p-3 rounded-xl border border-purple-500/20 bg-purple-50/50 dark:bg-purple-950/20">
-                  <div className="space-y-0.5 pr-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-900 dark:text-purple-200">
-                      <Zap className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                      <span>Apenas fluxos com gatilho "Outra automação"</span>
-                    </div>
-                    <p className="text-[11px] text-purple-700/80 dark:text-purple-300/80 leading-snug">
-                      Filtra para exibir apenas automações com gatilho de sistema para serem ativadas por outro fluxo ({actionTriggerWorkflowsCount} disponíveis).
-                    </p>
-                  </div>
-                  <Switch
-                    id="filter-action-triggers-only"
-                    checked={onlyActionTrigger}
-                    onCheckedChange={(checked) => {
-                      updateConfig("onlyActionTrigger", checked);
-                    }}
-                    className="scale-90"
-                  />
                 </div>
 
                 <div className="space-y-2">
@@ -3182,7 +3154,7 @@ export function UnifiedNodeConfigPanel({
                         <div className="p-4 text-xs text-muted-foreground text-center space-y-1.5">
                           <p className="font-semibold text-slate-700">Nenhum fluxo com gatilho "Outra automação" encontrado</p>
                           <p className="text-[11px] text-slate-500 leading-relaxed">
-                            Adicione o gatilho de sistema <strong>"Outra automação"</strong> no início do fluxo desejado, ou desative a opção acima para listar todos os fluxos da empresa.
+                            Adicione o gatilho de sistema <strong>"Outra automação"</strong> no início do fluxo que deseja acionar.
                           </p>
                         </div>
                       ) : (

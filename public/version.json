@@ -1,6 +1,6 @@
 {
-  "commit": "head",
-  "shortCommit": "head",
-  "message": "feat(webphone): restringir webphone para usuarios com token e adicionar gestao de token e ramal em membros",
-  "builtAt": "2026-11-05T17:18:00.000Z"
+  "commit": "2bd6353aea981adfa21569719a1b67efa50f0353",
+  "shortCommit": "2bd6353",
+  "message": "feat(workflows): add option to filter target workflows by 'Outra automação' system trigger in trigger_workflow node",
+  "builtAt": "2026-11-05T17:36:46.519Z"
 }
