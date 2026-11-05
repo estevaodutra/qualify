@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
@@ -55,34 +55,23 @@ export default function Pipelines() {
     });
   };
 
-  // Initialize active pipeline from localStorage
-  useEffect(() => {
-    if (!activeCompany?.id) return;
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlPipelineId = urlParams.get("pipelineId");
-    
-    const stored = localStorage.getItem(`qualify-active-pipeline:${activeCompany.id}`);
-    
-    if (urlPipelineId) {
-      setActivePipelineId(urlPipelineId);
-    } else if (stored) {
-      setActivePipelineId(stored);
-    }
-  }, [activeCompany?.id]);
+  // Fetch groups
+  const { data: groups } = useQuery({
+    queryKey: ["pipeline-groups", activeCompany?.id],
+    queryFn: async () => {
+      if (!activeCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("pipeline_groups")
+        .select("*")
+        .eq("company_id", activeCompany.id)
+        .order("order_index", { ascending: true });
+      if (error) throw error;
+      return data as PipelineGroup[];
+    },
+    enabled: !!activeCompany?.id,
+  });
 
-  // Persist active pipeline
-  useEffect(() => {
-    if (activeCompany?.id && activePipelineId) {
-      localStorage.setItem(`qualify-active-pipeline:${activeCompany.id}`, activePipelineId);
-      
-      const url = new URL(window.location.href);
-      url.searchParams.set("pipelineId", activePipelineId);
-      window.history.replaceState({}, "", url.toString());
-    }
-  }, [activePipelineId, activeCompany?.id]);
-
-  // Fallback to first pipeline if none selected
+  // Fetch pipelines
   const { data: pipelines } = useQuery({
     queryKey: ["pipelines", activeCompany?.id],
     queryFn: async () => {
@@ -98,12 +87,64 @@ export default function Pipelines() {
     enabled: !!activeCompany?.id
   });
 
-  useEffect(() => {
-    if (pipelines && pipelines.length > 0 && !activePipelineId) {
-      const firstActive = pipelines.find(p => p.status !== "archived") || pipelines[0];
-      setActivePipelineId(firstActive.id);
+  // Helper to find the first pipeline in the entire list (respecting groups and order)
+  const getFirstPipelineId = (groupsList?: PipelineGroup[], pipelinesList?: Pipeline[]): string | null => {
+    if (!pipelinesList || pipelinesList.length === 0) return null;
+    const active = pipelinesList.filter(p => p.status !== "archived");
+    if (active.length === 0) return pipelinesList[0]?.id || null;
+
+    if (groupsList && groupsList.length > 0) {
+      const sortedGroups = [...groupsList].sort((a, b) => a.order_index - b.order_index);
+      for (const g of sortedGroups) {
+        const inGroup = active
+          .filter(p => p.group_id === g.id)
+          .sort((a, b) => a.order_index - b.order_index);
+        if (inGroup.length > 0) {
+          return inGroup[0].id;
+        }
+      }
     }
-  }, [pipelines, activePipelineId]);
+
+    const unassigned = active
+      .filter(p => !p.group_id)
+      .sort((a, b) => a.order_index - b.order_index);
+    if (unassigned.length > 0) {
+      return unassigned[0].id;
+    }
+
+    return active[0]?.id || null;
+  };
+
+  // Always reset to the primary (first) pipeline on page load / reload
+  const hasInitializedRef = useRef(false);
+
+  useEffect(() => {
+    hasInitializedRef.current = false;
+    if (activeCompany?.id) {
+      localStorage.removeItem(`qualify-active-pipeline:${activeCompany.id}`);
+    }
+  }, [activeCompany?.id]);
+
+  useEffect(() => {
+    if (pipelines && pipelines.length > 0 && groups !== undefined && !hasInitializedRef.current) {
+      const firstId = getFirstPipelineId(groups, pipelines);
+      if (firstId) {
+        setActivePipelineId(firstId);
+        hasInitializedRef.current = true;
+      }
+    }
+  }, [pipelines, groups]);
+
+  // If current active pipeline was removed or does not exist, fallback to first pipeline
+  useEffect(() => {
+    if (pipelines && pipelines.length > 0 && activePipelineId) {
+      const exists = pipelines.some(p => p.id === activePipelineId);
+      if (!exists) {
+        const firstId = getFirstPipelineId(groups, pipelines);
+        if (firstId) setActivePipelineId(firstId);
+      }
+    }
+  }, [pipelines, groups, activePipelineId]);
 
   // Fetch active pipeline with stages
   const { data: activePipeline } = useQuery({
@@ -121,21 +162,11 @@ export default function Pipelines() {
     enabled: !!activePipelineId
   });
 
-  // Fetch active pipeline's group
-  const { data: activeGroup } = useQuery({
-    queryKey: ["pipeline-groups", activeCompany?.id, activePipeline?.group_id],
-    queryFn: async () => {
-      if (!activePipeline?.group_id) return null;
-      const { data, error } = await supabase
-        .from("pipeline_groups")
-        .select("*")
-        .eq("id", activePipeline.group_id)
-        .single();
-      if (error) throw error;
-      return data as PipelineGroup;
-    },
-    enabled: !!activePipeline?.group_id
-  });
+  // Derive active pipeline's group from cached groups
+  const activeGroup = useMemo(() => {
+    if (!activePipeline?.group_id || !groups) return undefined;
+    return groups.find(g => g.id === activePipeline.group_id);
+  }, [groups, activePipeline?.group_id]);
 
   // Fetch deals for active pipeline
   const { data: deals, isLoading: loadingDeals } = useQuery({

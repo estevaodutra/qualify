@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useCompanyMembers } from "@/hooks/useCompanyMembers";
+import { useCompanyMembers, type CompanyMember } from "@/hooks/useCompanyMembers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,19 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, ShieldAlert, UserPlus, Edit2, Check, X } from "lucide-react";
+import {
+  Loader2,
+  Trash2,
+  ShieldAlert,
+  UserPlus,
+  Edit2,
+  Check,
+  X,
+  PhoneCall,
+  CheckCircle2,
+  Key,
+} from "lucide-react";
+import { EditMemberTelephonyDialog } from "@/components/company/EditMemberTelephonyDialog";
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_admin: "Você precisa ser administrador desta empresa.",
@@ -25,9 +37,11 @@ export default function MembersPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "operator">("operator");
   const [extension, setExtension] = useState("");
+  const [token, setToken] = useState("");
 
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editExtension, setEditExtension] = useState("");
+  const [selectedMemberForTelephony, setSelectedMemberForTelephony] = useState<CompanyMember | null>(null);
 
   if (!isAdmin) {
     return (
@@ -56,6 +70,7 @@ export default function MembersPage() {
         email: email.trim().toLowerCase(),
         role,
         extension: extension.trim() || undefined,
+        api4com_token: token.trim() || undefined,
       });
       toast({
         title: "Membro adicionado",
@@ -63,6 +78,7 @@ export default function MembersPage() {
       });
       setEmail("");
       setExtension("");
+      setToken("");
       setRole("operator");
     } catch (err) {
       const code = (err as Error).message;
@@ -123,13 +139,13 @@ export default function MembersPage() {
             <CardTitle>Adicionar membro</CardTitle>
           </div>
           <CardDescription>
-            O usuário precisa já ter uma conta no Qualify.
+            O usuário precisa já ter uma conta no Qualify. Se preencher o token, o Webphone será habilitado automaticamente para ele.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAdd} className="grid gap-4 md:grid-cols-[1fr_180px_140px_auto] md:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="member-email">Email</Label>
+          <form onSubmit={handleAdd} className="grid gap-3 sm:grid-cols-2 md:grid-cols-[1fr_150px_120px_160px_auto] md:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="member-email" className="text-xs">Email</Label>
               <Input
                 id="member-email"
                 type="email"
@@ -137,12 +153,13 @@ export default function MembersPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className="h-9 text-xs"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Papel</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Papel</Label>
               <Select value={role} onValueChange={(v) => setRole(v as "admin" | "operator")}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -151,16 +168,28 @@ export default function MembersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="member-ext">Ramal (opcional)</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="member-ext" className="text-xs">Ramal (opcional)</Label>
               <Input
                 id="member-ext"
                 value={extension}
                 onChange={(e) => setExtension(e.target.value)}
                 placeholder="1001"
+                className="h-9 text-xs font-mono"
               />
             </div>
-            <Button type="submit" disabled={addMember.isPending}>
+            <div className="space-y-1.5">
+              <Label htmlFor="member-token" className="text-xs">Token Webphone</Label>
+              <Input
+                id="member-token"
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Token API4COM"
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+            <Button type="submit" disabled={addMember.isPending} className="h-9 text-xs">
               {addMember.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -193,8 +222,9 @@ export default function MembersPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Papel</TableHead>
                   <TableHead>Ramal</TableHead>
+                  <TableHead>Token Webphone</TableHead>
                   <TableHead>Entrou em</TableHead>
-                  <TableHead className="w-12" />
+                  <TableHead className="w-24 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -212,7 +242,7 @@ export default function MembersPage() {
                         <div className="flex items-center gap-1">
                           <Input
                             autoFocus
-                            className="w-24 h-8"
+                            className="w-20 h-7 text-xs font-mono"
                             value={editExtension}
                             onChange={(e) => setEditExtension(e.target.value)}
                             onKeyDown={(e) => {
@@ -223,23 +253,23 @@ export default function MembersPage() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-green-600"
+                            className="h-7 w-7 text-green-600"
                             onClick={() => handleSaveExtension(m.user_id)}
                           >
-                            <Check className="h-4 w-4" />
+                            <Check className="h-3.5 w-3.5" />
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-muted-foreground"
+                            className="h-7 w-7 text-muted-foreground"
                             onClick={() => setEditingUserId(null)}
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 group">
-                          <span className={!m.extension ? "text-muted-foreground italic" : ""}>
+                        <div className="flex items-center gap-1.5 group">
+                          <span className={!m.extension ? "text-muted-foreground italic text-xs font-mono" : "text-xs font-mono font-bold text-foreground"}>
                             {m.extension || "—"}
                           </span>
                           <Button
@@ -247,25 +277,61 @@ export default function MembersPage() {
                             size="icon"
                             className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={() => startEditing(m.user_id, m.extension || "")}
-                            title="Editar ramal"
+                            title="Editar ramal rapidamente"
                           >
                             <Edit2 className="h-3 w-3" />
                           </Button>
                         </div>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {m.api4com_token ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMemberForTelephony(m)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-medium transition-colors border border-emerald-500/20"
+                          title="Clique para gerenciar o token e ramal do Webphone"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          <span>Configurado</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMemberForTelephony(m)}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted text-[10px] transition-colors border border-border"
+                          title="Clique para configurar o token do Webphone"
+                        >
+                          <PhoneCall className="h-2.5 w-2.5 text-purple-600" />
+                          <span>Sem Token</span>
+                        </button>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {new Date(m.joined_at).toLocaleDateString("pt-BR")}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemove(m.id, m.full_name || m.email || "este membro")}
-                        disabled={removeMember.isPending}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                          onClick={() => setSelectedMemberForTelephony(m)}
+                          title="Configurar ramal e token do Webphone"
+                        >
+                          <PhoneCall className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemove(m.id, m.full_name || m.email || "este membro")}
+                          disabled={removeMember.isPending}
+                          title="Remover membro"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -274,6 +340,13 @@ export default function MembersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Configuração de Telefonia e Token do Membro */}
+      <EditMemberTelephonyDialog
+        member={selectedMemberForTelephony}
+        open={!!selectedMemberForTelephony}
+        onClose={() => setSelectedMemberForTelephony(null)}
+      />
     </div>
   );
 }

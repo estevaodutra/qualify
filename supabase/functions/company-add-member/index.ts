@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     }
     const callerId = user.id;
 
-    const { action, email, role, extension, company_id, member_id, user_id } = await req.json();
+    const { action, email, role, extension, api4com_token, company_id, member_id, user_id } = await req.json();
 
     if (!company_id) {
       return new Response(JSON.stringify({ error: "company_id required" }), {
@@ -112,12 +112,53 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action === "update_extension") {
+    if (action === "update_extension" || action === "update_telephony") {
       if (!user_id) {
-         return new Response(JSON.stringify({ error: "user_id required for update_extension" }), { status: 400, headers: corsHeaders });
+         return new Response(JSON.stringify({ error: "user_id required for update" }), { status: 400, headers: corsHeaders });
       }
-      
-      await adminClient.from("call_operators").update({ extension: extension || null }).eq("user_id", user_id).eq("company_id", company_id);
+
+      const cleanExtension = extension !== undefined ? (extension ? String(extension).trim() : null) : undefined;
+      const cleanToken = api4com_token !== undefined ? (api4com_token ? String(api4com_token).trim() : null) : undefined;
+
+      const { data: existingOp } = await adminClient
+        .from("call_operators")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("company_id", company_id)
+        .maybeSingle();
+
+      if (existingOp) {
+        const updatePayload: Record<string, any> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (cleanExtension !== undefined) updatePayload.extension = cleanExtension;
+        if (cleanToken !== undefined) updatePayload.api4com_token = cleanToken;
+        await adminClient.from("call_operators").update(updatePayload).eq("id", existingOp.id);
+      } else {
+        const { data: prof } = await adminClient
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", user_id)
+          .maybeSingle();
+
+        await adminClient.from("call_operators").insert({
+          user_id,
+          company_id,
+          operator_name: prof?.full_name || prof?.email || "Operador",
+          extension: cleanExtension || null,
+          api4com_token: cleanToken || null,
+          is_active: true,
+          status: "offline",
+        });
+      }
+
+      // Sincronizar na tabela profiles para consistência global
+      const profileUpdates: Record<string, any> = {};
+      if (cleanExtension !== undefined) profileUpdates.api4com_extension = cleanExtension;
+      if (cleanToken !== undefined) profileUpdates.api4com_token = cleanToken;
+      if (Object.keys(profileUpdates).length > 0) {
+        await adminClient.from("profiles").update(profileUpdates).eq("id", user_id);
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
@@ -174,21 +215,36 @@ Deno.serve(async (req) => {
 
     if (memberError) throw memberError;
 
-    // If operator role, also create a call_operator record
-    if (memberRole === "operator") {
+    // Criar ou atualizar registro em call_operators caso seja operador ou tenha ramal/token
+    const cleanExt = extension ? String(extension).trim() : null;
+    const cleanTok = api4com_token ? String(api4com_token).trim() : null;
+
+    if (memberRole === "operator" || cleanExt || cleanTok) {
       const { error: opError } = await adminClient
         .from("call_operators")
-        .insert({
-          user_id: profile.id,
-          company_id,
-          operator_name: profile.full_name || profile.email,
-          extension: extension || null,
-          is_active: true,
-          status: "offline",
-        });
+        .upsert(
+          {
+            user_id: profile.id,
+            company_id,
+            operator_name: profile.full_name || profile.email,
+            extension: cleanExt,
+            api4com_token: cleanTok,
+            is_active: true,
+            status: "offline",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,company_id" }
+        );
 
       if (opError) {
-        console.error("Failed to create call_operator:", opError);
+        console.error("Failed to upsert call_operator:", opError);
+      }
+
+      if (cleanExt || cleanTok) {
+        const profUpdates: Record<string, any> = {};
+        if (cleanExt) profUpdates.api4com_extension = cleanExt;
+        if (cleanTok) profUpdates.api4com_token = cleanTok;
+        await adminClient.from("profiles").update(profUpdates).eq("id", profile.id);
       }
     }
 

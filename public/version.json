@@ -1,6 +1,6 @@
 {
-  "commit": "sprint-criafy-bridge-audio-schedule",
-  "shortCommit": "bfa2014",
-  "message": "feat(sprint-criafy): add voice recorder and automatic/prompted post scheduling from sprint cards to criafy",
-  "builtAt": "2026-11-04T19:08:45.000Z"
+  "commit": "head",
+  "shortCommit": "head",
+  "message": "feat(webphone): restringir webphone para usuarios com token e adicionar gestao de token e ramal em membros",
+  "builtAt": "2026-11-05T17:18:00.000Z"
 }

@@ -82,7 +82,53 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .maybeSingle();
 
       if (!error && data) {
+        // Se call_operators não tem token, busca do profile como fallback
+        if (!data.api4com_token) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("api4com_token, api4com_extension, api4com_domain, api4com_password")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (prof?.api4com_token) {
+            data.api4com_token = prof.api4com_token;
+            if (!data.extension && prof.api4com_extension) data.extension = prof.api4com_extension;
+            if (!data.sip_domain && prof.api4com_domain) data.sip_domain = prof.api4com_domain;
+            if (!data.sip_password && prof.api4com_password) data.sip_password = prof.api4com_password;
+          }
+        }
         setOperator(data);
+      } else if (!data) {
+        // Se ainda não existe call_operators, verifica se o usuário possui token no perfil
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("full_name, email, api4com_token, api4com_extension, api4com_domain, api4com_password")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (prof?.api4com_token) {
+          const { data: newOp } = await supabase
+            .from("call_operators")
+            .insert({
+              user_id: user.id,
+              company_id: activeCompanyId,
+              operator_name: prof.full_name || prof.email || "Operador",
+              extension: prof.api4com_extension || null,
+              api4com_token: prof.api4com_token,
+              sip_domain: prof.api4com_domain || null,
+              sip_password: prof.api4com_password || null,
+              is_active: true,
+              status: "offline",
+            })
+            .select()
+            .maybeSingle();
+
+          if (newOp) {
+            setOperator(newOp);
+          }
+        } else {
+          setOperator(null);
+        }
       }
     } catch (err) {
       console.error("[WebphoneContext] Erro ao buscar operador:", err);

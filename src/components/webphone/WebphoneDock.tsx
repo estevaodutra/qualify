@@ -87,8 +87,9 @@ export const WebphoneDock: React.FC = () => {
     await dial({ phone: manualPhone.trim() });
   };
 
-  // Se não houver operador carregado ou não for admin/operador, oculta
-  if (!operator) return null;
+  // O Webphone dock só fica visível e disponível para quem tem o token do webphone preenchido
+  const hasToken = Boolean(operator?.api4com_token?.trim());
+  if (!operator || !hasToken) return null;
 
   return (
     <>

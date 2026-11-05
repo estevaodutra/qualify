@@ -22,17 +22,17 @@ CREATE POLICY "Company members can view stages" ON public.pipeline_stages
 CREATE POLICY "Company admins can manage stages" ON public.pipeline_stages 
   FOR ALL TO authenticated USING (public.is_company_admin(company_id, auth.uid())) WITH CHECK (public.is_company_admin(company_id, auth.uid()));
 
--- Insert default stages for existing companies
+-- Insert default stages for existing companies only if company has no stages at all
 INSERT INTO public.pipeline_stages (company_id, name, color, order_index)
-SELECT id, 'Novo', '#94a3b8', 0 FROM public.companies ON CONFLICT DO NOTHING;
+SELECT c.id, 'Novo', '#94a3b8', 0 FROM public.companies c WHERE NOT EXISTS (SELECT 1 FROM public.pipeline_stages s WHERE s.company_id = c.id);
 INSERT INTO public.pipeline_stages (company_id, name, color, order_index)
-SELECT id, 'Contactado', '#38bdf8', 1 FROM public.companies ON CONFLICT DO NOTHING;
+SELECT c.id, 'Contactado', '#38bdf8', 1 FROM public.companies c WHERE NOT EXISTS (SELECT 1 FROM public.pipeline_stages s WHERE s.company_id = c.id);
 INSERT INTO public.pipeline_stages (company_id, name, color, order_index)
-SELECT id, 'Qualificado', '#6366f1', 2 FROM public.companies ON CONFLICT DO NOTHING;
+SELECT c.id, 'Qualificado', '#6366f1', 2 FROM public.companies c WHERE NOT EXISTS (SELECT 1 FROM public.pipeline_stages s WHERE s.company_id = c.id);
 INSERT INTO public.pipeline_stages (company_id, name, color, order_index)
-SELECT id, 'Proposta', '#f59e0b', 3 FROM public.companies ON CONFLICT DO NOTHING;
+SELECT c.id, 'Proposta', '#f59e0b', 3 FROM public.companies c WHERE NOT EXISTS (SELECT 1 FROM public.pipeline_stages s WHERE s.company_id = c.id);
 INSERT INTO public.pipeline_stages (company_id, name, color, order_index)
-SELECT id, 'Fechado', '#22c55e', 4 FROM public.companies ON CONFLICT DO NOTHING;
+SELECT c.id, 'Fechado', '#22c55e', 4 FROM public.companies c WHERE NOT EXISTS (SELECT 1 FROM public.pipeline_stages s WHERE s.company_id = c.id);
 
 -- 2. Add columns to leads table
 ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES public.companies(id);
