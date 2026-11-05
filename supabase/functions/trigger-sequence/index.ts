@@ -209,9 +209,12 @@ Deno.serve(async (req) => {
         const nodeCfg = trigNode.config as Record<string, any>;
         const nodeTriggerConfig = nodeCfg.triggerConfig || {};
         const triggers = nodeCfg.triggers || [];
+        const isChainedFromWorkflow = !!(payload.triggerContext as any)?.parentWorkflowId;
         const matchedTrig = effectiveTriggerId 
           ? triggers.find((t: any) => t.id === effectiveTriggerId)
-          : (triggers.length > 0 ? triggers[0] : null);
+          : (isChainedFromWorkflow 
+              ? (triggers.find((t: any) => t.type === "action") || (triggers.length > 0 ? triggers[0] : null))
+              : (triggers.length > 0 ? triggers[0] : null));
 
         triggerConfig = {
           ...nodeTriggerConfig,

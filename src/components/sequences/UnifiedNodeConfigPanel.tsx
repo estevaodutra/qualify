@@ -69,7 +69,7 @@ import { ConditionEditors } from "./conditions/ConditionEditors";
 import { getActionDefinition } from "./actions/actionRegistry";
 import { ActionSelectorModal } from "./actions/ActionSelectorModal";
 import { ActionEditors } from "./actions/ActionEditors";
-import { useWorkflowDefinitions } from "@/hooks/useWorkflowDefinitions";
+import { useWorkflowDefinitions, isActionTriggerWorkflow } from "@/hooks/useWorkflowDefinitions";
 
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -3092,89 +3092,169 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* TRIGGER_WORKFLOW - Ativar outro fluxo */}
-          {node.nodeType === "trigger_workflow" && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/50 p-3.5 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
-                  <Workflow className="h-4 w-4 text-emerald-600" />
-                  <span>Ativar outro fluxo</span>
-                </div>
-                <p className="text-xs text-emerald-700/90 leading-relaxed">
-                  Quando o contato chegar neste bloco, a automação selecionada abaixo será iniciada para ele, repassando o contato, variáveis e histórico.
-                </p>
-              </div>
+          {node.nodeType === "trigger_workflow" && (() => {
+            const onlyActionTrigger = currentConfig.onlyActionTrigger !== undefined
+              ? Boolean(currentConfig.onlyActionTrigger)
+              : true;
 
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-700">Fluxo a ser ativado</Label>
-                <Select
-                  value={(currentConfig.targetWorkflowId as string) || (currentConfig.workflowId as string) || (currentConfig.sequenceId as string) || ""}
-                  onValueChange={(val) => {
-                    const selected = workflows.find((w) => w.id === val || w.sourceId === val);
-                    const name = selected?.name || "Workflow";
-                    updateMultipleConfigs({
-                      targetWorkflowId: val,
-                      targetWorkflowName: name,
-                      targetWorkflowSourceId: selected?.sourceId || val,
-                      workflowId: val,
-                      workflowName: name,
-                      sequenceId: val,
-                      sequenceName: name,
-                    });
-                  }}
-                >
-                  <SelectTrigger className="rounded-xl border-border/60 h-10">
-                    <SelectValue placeholder="Selecione o fluxo a ser disparado..." />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {workflows.length === 0 ? (
-                      <div className="p-3 text-xs text-muted-foreground text-center">
-                        Nenhum fluxo encontrado na empresa.
-                      </div>
-                    ) : (
-                      workflows.map((wf) => (
-                        <SelectItem key={wf.id} value={wf.id}>
-                          <div className="flex items-center gap-2">
-                            <Workflow className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                            <span className="font-medium text-slate-800">{wf.name}</span>
-                            {wf.status && (
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px] h-5 px-1.5 ml-1 font-normal",
-                                  wf.status === "active"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : "bg-slate-50 text-slate-500 border-slate-200"
-                                )}
-                              >
-                                {wf.status === "active" ? "Ativo" : wf.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+            const actionTriggerWorkflowsCount = workflows.filter((w) => isActionTriggerWorkflow(w)).length;
 
-              {Boolean((currentConfig.targetWorkflowId as string) || (currentConfig.workflowId as string)) && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Fluxo Vinculado</span>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-800">
-                      {(currentConfig.targetWorkflowName as string) || (currentConfig.workflowName as string) || "Automação vinculada"}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-800">
-                      Pronto para disparar
-                    </Badge>
+            const filteredWorkflows = workflows.filter((w) => {
+              const isCurrentlySelected = 
+                w.id === currentConfig.targetWorkflowId || 
+                w.sourceId === currentConfig.targetWorkflowId ||
+                w.id === currentConfig.workflowId ||
+                w.sourceId === currentConfig.workflowId ||
+                w.id === currentConfig.sequenceId ||
+                w.sourceId === currentConfig.sequenceId;
+              if (!onlyActionTrigger) return true;
+              return isCurrentlySelected || isActionTriggerWorkflow(w);
+            });
+
+            const selectedWf = workflows.find(
+              (w) => w.id === currentConfig.targetWorkflowId || w.sourceId === currentConfig.targetWorkflowId ||
+                     w.id === currentConfig.workflowId || w.sourceId === currentConfig.workflowId ||
+                     w.id === currentConfig.sequenceId || w.sourceId === currentConfig.sequenceId
+            );
+            const hasAction = selectedWf ? isActionTriggerWorkflow(selectedWf) : false;
+
+            return (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/50 p-3.5 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
+                    <Workflow className="h-4 w-4 text-emerald-600" />
+                    <span>Ativar outro fluxo</span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Ao executar este nó, o contato será direcionado para o fluxo selecionado. O fluxo atual continuará normalmente caso haja novos blocos conectados à saída.
+                  <p className="text-xs text-emerald-700/90 leading-relaxed">
+                    Quando o contato chegar neste bloco, a automação selecionada abaixo será iniciada para ele, repassando o contato, variáveis e histórico.
                   </p>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Opção para filtrar apenas fluxos com gatilho "Outra automação" */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-purple-500/20 bg-purple-50/50 dark:bg-purple-950/20">
+                  <div className="space-y-0.5 pr-3">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-900 dark:text-purple-200">
+                      <Zap className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                      <span>Apenas fluxos com gatilho "Outra automação"</span>
+                    </div>
+                    <p className="text-[11px] text-purple-700/80 dark:text-purple-300/80 leading-snug">
+                      Filtra para exibir apenas automações com gatilho de sistema para serem ativadas por outro fluxo ({actionTriggerWorkflowsCount} disponíveis).
+                    </p>
+                  </div>
+                  <Switch
+                    id="filter-action-triggers-only"
+                    checked={onlyActionTrigger}
+                    onCheckedChange={(checked) => {
+                      updateConfig("onlyActionTrigger", checked);
+                    }}
+                    className="scale-90"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-slate-700">Fluxo a ser ativado</Label>
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      {filteredWorkflows.length} {filteredWorkflows.length === 1 ? "fluxo disponível" : "fluxos disponíveis"}
+                    </span>
+                  </div>
+                  <Select
+                    value={(currentConfig.targetWorkflowId as string) || (currentConfig.workflowId as string) || (currentConfig.sequenceId as string) || ""}
+                    onValueChange={(val) => {
+                      const selected = workflows.find((w) => w.id === val || w.sourceId === val);
+                      const name = selected?.name || "Workflow";
+                      updateMultipleConfigs({
+                        targetWorkflowId: val,
+                        targetWorkflowName: name,
+                        targetWorkflowSourceId: selected?.sourceId || val,
+                        workflowId: val,
+                        workflowName: name,
+                        sequenceId: val,
+                        sequenceName: name,
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="rounded-xl border-border/60 h-10">
+                      <SelectValue placeholder="Selecione o fluxo a ser disparado..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {filteredWorkflows.length === 0 ? (
+                        <div className="p-4 text-xs text-muted-foreground text-center space-y-1.5">
+                          <p className="font-semibold text-slate-700">Nenhum fluxo com gatilho "Outra automação" encontrado</p>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Adicione o gatilho de sistema <strong>"Outra automação"</strong> no início do fluxo desejado, ou desative a opção acima para listar todos os fluxos da empresa.
+                          </p>
+                        </div>
+                      ) : (
+                        filteredWorkflows.map((wf) => {
+                          const wfHasAction = isActionTriggerWorkflow(wf);
+                          return (
+                            <SelectItem key={wf.id} value={wf.id}>
+                              <div className="flex items-center gap-2">
+                                <Workflow className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <span className="font-medium text-slate-800">{wf.name}</span>
+                                {wfHasAction && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] h-4 px-1.5 font-normal bg-purple-50 text-purple-700 border-purple-200 gap-0.5"
+                                  >
+                                    <Zap className="h-2.5 w-2.5 text-purple-600" /> Outra automação
+                                  </Badge>
+                                )}
+                                {wf.status && (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] h-5 px-1.5 ml-1 font-normal",
+                                      wf.status === "active"
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : "bg-slate-50 text-slate-500 border-slate-200"
+                                    )}
+                                  >
+                                    {wf.status === "active" ? "Ativo" : wf.status}
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          );
+                        })
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {Boolean((currentConfig.targetWorkflowId as string) || (currentConfig.workflowId as string)) && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Fluxo Vinculado</span>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-800">
+                        {(currentConfig.targetWorkflowName as string) || (currentConfig.workflowName as string) || selectedWf?.name || "Automação vinculada"}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {hasAction ? (
+                          <Badge variant="secondary" className="text-[10px] bg-purple-100 text-purple-800 border-purple-200 gap-1">
+                            <Zap className="h-2.5 w-2.5 text-purple-600" /> Gatilho Sistema
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-800">
+                            Pronto para disparar
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {selectedWf && !hasAction && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                        ⚠️ <strong>Atenção:</strong> O fluxo selecionado não possui o gatilho <em>"Outra automação"</em> configurado em seus gatilhos de início.
+                      </p>
+                    )}
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Ao executar este nó, o contato será direcionado para o fluxo selecionado. O fluxo atual continuará normalmente caso haja novos blocos conectados à saída.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* FIELD_OP - Removido daqui, agora é renderizado via FieldMappingEditor no NodeEditorModal */}
 

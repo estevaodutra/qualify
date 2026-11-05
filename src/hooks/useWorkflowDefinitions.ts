@@ -20,8 +20,18 @@ export interface WorkflowDefinition {
   sourceId: string;
   triggerType?: string;
   triggerConfig?: any;
+  triggers?: any[];
   createdAt: string;
   updatedAt: string;
+}
+
+export function isActionTriggerWorkflow(wf: WorkflowDefinition): boolean {
+  if (!wf) return false;
+  if (wf.triggerType === "action") return true;
+  if (wf.triggerConfig?.triggerType === "action" || wf.triggerConfig?.type === "action") return true;
+  if (Array.isArray(wf.triggerConfig?.triggers) && wf.triggerConfig.triggers.some((t: any) => t.type === "action")) return true;
+  if (Array.isArray(wf.triggers) && wf.triggers.some((t: any) => t.type === "action")) return true;
+  return false;
 }
 
 interface DbWorkflowDefinition {
@@ -38,20 +48,31 @@ interface DbWorkflowDefinition {
   updated_at: string;
 }
 
-const transformDbToFrontend = (db: DbWorkflowDefinition, seqConfig?: { trigger_type?: string; trigger_config?: any }): WorkflowDefinition => ({
-  id: db.id,
-  companyId: db.company_id,
-  folderId: db.folder_id || undefined,
-  name: db.name,
-  description: db.description || undefined,
-  status: (db.status as WorkflowStatus) || "draft",
-  sourceType: db.source_type as WorkflowSourceType,
-  sourceId: db.source_id,
-  triggerType: seqConfig?.trigger_type || db.trigger_type || undefined,
-  triggerConfig: seqConfig?.trigger_config || undefined,
-  createdAt: db.created_at,
-  updatedAt: db.updated_at,
-});
+const transformDbToFrontend = (
+  db: DbWorkflowDefinition, 
+  seqConfig?: { trigger_type?: string; trigger_config?: any },
+  nodeTriggers?: any[]
+): WorkflowDefinition => {
+  const triggersFromNode = Array.isArray(nodeTriggers) ? nodeTriggers : [];
+  const triggersFromSeq = Array.isArray(seqConfig?.trigger_config?.triggers) ? seqConfig.trigger_config.triggers : [];
+  const combinedTriggers = [...triggersFromNode, ...triggersFromSeq];
+
+  return {
+    id: db.id,
+    companyId: db.company_id,
+    folderId: db.folder_id || undefined,
+    name: db.name,
+    description: db.description || undefined,
+    status: (db.status as WorkflowStatus) || "draft",
+    sourceType: db.source_type as WorkflowSourceType,
+    sourceId: db.source_id,
+    triggerType: seqConfig?.trigger_type || db.trigger_type || undefined,
+    triggerConfig: seqConfig?.trigger_config || undefined,
+    triggers: combinedTriggers,
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+  };
+};
 
 export function useWorkflowDefinitions(filters?: { folderId?: string | null; status?: WorkflowStatus }) {
   const { user } = useAuth();
@@ -90,6 +111,24 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
         throw defsRes.error;
       }
 
+      const rawDefs = (defsRes.data as unknown as DbWorkflowDefinition[]) || [];
+      const sourceIds = rawDefs.map((d) => d.source_id).filter(Boolean);
+
+      // Buscar nós de gatilho para mapear multi-gatilhos configurados no builder
+      let triggerNodesData: any[] = [];
+      if (sourceIds.length > 0) {
+        try {
+          const { data: nodes } = await supabase
+            .from("sequence_nodes")
+            .select("sequence_id, config")
+            .eq("node_type", "trigger")
+            .in("sequence_id", sourceIds);
+          if (nodes) triggerNodesData = nodes;
+        } catch (nodeErr) {
+          console.warn("[useWorkflowDefinitions] Aviso ao carregar sequence_nodes:", nodeErr);
+        }
+      }
+
       const seqsMap = new Map<string, { trigger_type?: string; trigger_config?: any }>();
       if (seqsRes.data) {
         for (const seq of seqsRes.data as any[]) {
@@ -97,8 +136,21 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
         }
       }
 
-      return (defsRes.data as unknown as DbWorkflowDefinition[]).map((d) => 
-        transformDbToFrontend(d, seqsMap.get(d.source_id))
+      const triggerNodesMap = new Map<string, any[]>();
+      for (const row of triggerNodesData) {
+        const triggers = (row.config?.triggers as any[]) || [];
+        if (row.config?.triggerType) {
+          triggers.push({ id: "root", type: row.config.triggerType, config: row.config.triggerConfig || {} });
+        }
+        if (triggerNodesMap.has(row.sequence_id)) {
+          triggerNodesMap.get(row.sequence_id)!.push(...triggers);
+        } else {
+          triggerNodesMap.set(row.sequence_id, triggers);
+        }
+      }
+
+      return rawDefs.map((d) => 
+        transformDbToFrontend(d, seqsMap.get(d.source_id), triggerNodesMap.get(d.source_id))
       );
     },
     enabled: !!user && !!activeCompanyId,
