@@ -27,21 +27,27 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isQuizEditor = location.pathname.startsWith("/quiz/") && location.pathname !== "/quiz";
   const isChat = location.pathname.startsWith("/chat");
   const isCriafyHub = location.pathname === "/criafy";
-  const [keyboardViewportHeight, setKeyboardViewportHeight] = useState<number | null>(null);
+  const [mobileViewport, setMobileViewport] = useState<{ height: number; keyboardOpen: boolean } | null>(null);
 
   useEffect(() => {
     const viewport = window.visualViewport;
-    let expandedHeight = viewport?.height ?? window.innerHeight;
+    let expandedHeight = Math.max(viewport?.height ?? 0, window.innerHeight);
     let frame = 0;
     let blurTimer = 0;
+    let settleTimer = 0;
+    let wasDesktop = window.innerWidth >= 768;
 
     const syncViewport = () => {
       if (window.innerWidth >= 768) {
-        setKeyboardViewportHeight(null);
+        wasDesktop = true;
+        setMobileViewport(null);
         return;
       }
 
       const height = viewport?.height ?? window.innerHeight;
+      if (wasDesktop) expandedHeight = Math.max(height, window.innerHeight);
+      wasDesktop = false;
+      const visibleHeight = height + (viewport?.offsetTop ?? 0);
       const focused = document.activeElement;
       const isEditing = focused instanceof HTMLElement && (
         focused.matches("textarea, input:not([type=checkbox]):not([type=radio]):not([type=file])") || focused.isContentEditable
@@ -50,11 +56,19 @@ export function AppLayout({ children }: AppLayoutProps) {
         expandedHeight - height,
         window.innerHeight - height - (viewport?.offsetTop ?? 0),
       );
-      if (!isEditing && keyboardHeight > 120) return;
-      const isOpen = isEditing && keyboardHeight > 120;
+      const keyboardOpen = isEditing && keyboardHeight > 120;
 
-      if (!isEditing) expandedHeight = height;
-      setKeyboardViewportHeight(isOpen ? Math.round(height + (viewport?.offsetTop ?? 0)) : null);
+      // iOS can keep the visual viewport short for a moment after the keyboard closes.
+      // Keep the last full height until the viewport reports its restored size.
+      const restoredHeight = keyboardHeight > 120
+        ? expandedHeight
+        : Math.max(visibleHeight, window.innerHeight);
+      if (!isEditing && keyboardHeight <= 120) expandedHeight = restoredHeight;
+      const next = {
+        height: Math.round(keyboardOpen ? visibleHeight : restoredHeight),
+        keyboardOpen,
+      };
+      setMobileViewport((current) => current?.height === next.height && current.keyboardOpen === next.keyboardOpen ? current : next);
     };
 
     const scheduleSync = () => {
@@ -63,38 +77,52 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
     const handleBlur = () => {
       window.clearTimeout(blurTimer);
+      window.clearTimeout(settleTimer);
       blurTimer = window.setTimeout(scheduleSync, 120);
+      settleTimer = window.setTimeout(() => {
+        scheduleSync();
+        if (window.location.pathname.startsWith("/chat") && window.scrollY > 0) {
+          window.scrollTo(0, 0);
+        }
+      }, 350);
+    };
+    const handleOrientationChange = () => {
+      expandedHeight = window.innerHeight;
+      scheduleSync();
     };
 
     scheduleSync();
     viewport?.addEventListener("resize", scheduleSync);
     viewport?.addEventListener("scroll", scheduleSync);
     window.addEventListener("resize", scheduleSync);
+    window.addEventListener("orientationchange", handleOrientationChange);
     document.addEventListener("focusin", scheduleSync);
     document.addEventListener("focusout", handleBlur);
     return () => {
       cancelAnimationFrame(frame);
       window.clearTimeout(blurTimer);
+      window.clearTimeout(settleTimer);
       viewport?.removeEventListener("resize", scheduleSync);
       viewport?.removeEventListener("scroll", scheduleSync);
       window.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("orientationchange", handleOrientationChange);
       document.removeEventListener("focusin", scheduleSync);
       document.removeEventListener("focusout", handleBlur);
     };
   }, []);
 
-  const chatKeyboardOpen = isChat && keyboardViewportHeight !== null;
+  const chatKeyboardOpen = isChat && mobileViewport?.keyboardOpen === true;
 
   return (
     <SidebarProvider defaultOpen>
       <div
-        className={`flex w-full max-w-full bg-background relative overflow-x-hidden overflow-y-hidden ${chatKeyboardOpen ? "" : "min-h-[100dvh]"}`}
-        style={chatKeyboardOpen ? { height: keyboardViewportHeight } : undefined}
+        className="relative flex h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden bg-background md:min-h-[100dvh]"
+        style={mobileViewport ? { height: mobileViewport.height } : undefined}
       >
         {/* System Sidebar */}
         <AppSidebar />
 
-        <div className={`flex flex-1 flex-col relative z-10 min-w-0 ${chatKeyboardOpen ? "h-full" : "h-[100dvh]"} overflow-hidden ${isQuizEditor ? "" : `pt-[max(env(safe-area-inset-top),32px)] ${chatKeyboardOpen ? "pb-0" : "pb-[calc(64px+env(safe-area-inset-bottom))]"} md:pt-0 md:pb-0`}`}>
+        <div className={`relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden ${isQuizEditor ? "" : `pt-[max(env(safe-area-inset-top),32px)] ${chatKeyboardOpen ? "pb-0" : "pb-[calc(64px+env(safe-area-inset-bottom))]"} md:pt-0 md:pb-0`}`}>
           <ImpersonationBanner />
           {!isQuizEditor && <AppHeader />}
           {!isQuizEditor && <InstanceStatusBanner />}
