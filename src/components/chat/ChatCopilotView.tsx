@@ -967,7 +967,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
                 ? `Converse com o Orquestrador Qualify sobre posicionamento da ${brandContext?.companyName || "sua empresa"}...`
                 : `Converse com o Copiloto IA da ${brandContext?.companyName || "sua empresa"}...`
             }
-            className="w-full bg-transparent px-2 py-2 text-sm outline-none resize-none transition-all duration-200 min-h-[38px] max-h-[140px] scrollbar-thin leading-relaxed text-foreground placeholder:text-muted-foreground"
+            className="w-full bg-transparent px-2 py-2 text-base md:text-sm outline-none resize-none transition-all duration-200 min-h-[38px] max-h-[140px] scrollbar-thin leading-relaxed text-foreground placeholder:text-muted-foreground"
           />
 
           <Button

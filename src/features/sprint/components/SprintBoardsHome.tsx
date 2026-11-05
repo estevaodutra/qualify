@@ -186,7 +186,7 @@ export const SprintBoardsHome: React.FC = () => {
   const favoriteBoards = boards.filter((b) => b.is_favorite);
 
   return (
-    <div className="flex-1 bg-background text-foreground p-6 md:p-8 space-y-8 overflow-y-auto">
+    <div className="flex-1 w-full min-w-0 bg-background text-foreground p-0 md:p-8 space-y-8">
       {/* Top Header com Padrão do Sistema */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div className="flex items-center gap-3">

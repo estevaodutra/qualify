@@ -14,6 +14,7 @@ import {
 import {
   SortableContext,
   horizontalListSortingStrategy,
+  verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
 import { useSprintStore } from "../state/sprintStore";
@@ -50,8 +51,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export const SprintBoardView: React.FC = () => {
+  const isMobile = useIsMobile();
   const { boardId } = useParams<{ boardId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const cardIdParam = searchParams.get("cardId");
@@ -303,7 +306,7 @@ export const SprintBoardView: React.FC = () => {
     selectedMemberFilters.length > 0;
 
   return (
-    <div className="flex-1 flex h-[calc(100vh-65px)] overflow-hidden bg-background">
+    <div className="flex-1 flex h-full min-h-0 w-full min-w-0 overflow-hidden bg-background">
       {/* Sidebar com Lista de Quadros */}
       <SprintSidebar
         isOpen={isSidebarOpen}
@@ -497,7 +500,7 @@ export const SprintBoardView: React.FC = () => {
       </div>
 
       {/* Área do Kanban com fundo padrão de board */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-muted/20">
+      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden md:overflow-x-auto md:overflow-y-hidden p-3 md:p-6 bg-muted/20">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -505,15 +508,15 @@ export const SprintBoardView: React.FC = () => {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex items-start gap-4 h-full" style={{ minWidth: "max-content" }}>
-            <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
+          <div className="flex w-full flex-col md:w-max md:flex-row items-start gap-4 md:h-full">
+            <SortableContext items={listIds} strategy={isMobile ? verticalListSortingStrategy : horizontalListSortingStrategy}>
               {lists.map((list, index) => (
                 <SprintListColumn key={list.id} list={list} index={index} />
               ))}
             </SortableContext>
 
             {/* Botão de Adicionar Lista */}
-            <div className="w-72 shrink-0">
+            <div className="w-full md:w-72 shrink-0">
               {isAddingList ? (
                 <form
                   onSubmit={handleCreateList}

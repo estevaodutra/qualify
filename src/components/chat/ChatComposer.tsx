@@ -751,10 +751,10 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
   };
 
   return (
-    <div className="p-2.5 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border/40 bg-card/10 space-y-2.5 sm:space-y-3 shrink-0 relative flex flex-col">
+    <div className="w-full min-w-0 p-2.5 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] focus-within:pb-2.5 md:focus-within:pb-4 border-t border-border/40 bg-card/10 space-y-2.5 sm:space-y-3 shrink-0 relative flex flex-col">
       {/* Templates & Workflows Dropdown Popover */}
       {showDropdown && filteredItems.length > 0 && (
-        <div className="absolute bottom-full left-4 mb-3 w-80 max-h-64 bg-popover/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl overflow-y-auto z-50 divide-y divide-border/40 animate-in slide-in-from-bottom-3 fade-in duration-200">
+        <div className="absolute bottom-full left-4 mb-3 w-[calc(100%-2rem)] max-w-80 max-h-64 bg-popover/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl overflow-y-auto z-50 divide-y divide-border/40 animate-in slide-in-from-bottom-3 fade-in duration-200">
           <div className="sticky top-0 bg-popover/80 backdrop-blur-sm p-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border/40 z-10">
             <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Comandos Rápidos</span>
             <span className="bg-muted px-1.5 py-0.5 rounded text-[8px]">Use ↑↓ para navegar</span>
@@ -908,7 +908,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
 
       {/* Textarea Composer & Actions */}
       <div className={cn(
-        "flex items-end gap-2 bg-background border rounded-2xl p-2 shadow-sm transition-colors duration-300 focus-within:border-primary/40 focus-within:shadow-md",
+        "flex w-full min-w-0 items-end gap-2 bg-background border rounded-2xl p-2 shadow-sm transition-colors duration-300 focus-within:border-primary/40 focus-within:shadow-md",
         isInternal ? "border-yellow-500/30 focus-within:border-yellow-500/50 bg-yellow-500/[0.02]" : "border-border/60"
       )}>
         {/* Attachment Button */}
@@ -922,7 +922,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
           <Paperclip className="h-4.5 w-4.5" />
         </Button>
 
-        <div className="flex-1 relative flex items-center min-h-[40px]">
+        <div className="flex-1 min-w-0 relative flex items-center min-h-[40px]">
           {recordingState === 'idle' ? (
             <textarea
               ref={textareaRef}
@@ -936,7 +936,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
                   : "Digite uma mensagem ou '/' para respostas rápidas..."
               }
               className={cn(
-                "w-full bg-transparent px-2 py-2.5 text-sm outline-none resize-none transition-all duration-300 min-h-[40px] max-h-[160px] scrollbar-thin scrollbar-track-transparent leading-relaxed",
+                "w-full bg-transparent px-2 py-2.5 text-base md:text-sm outline-none resize-none transition-all duration-300 min-h-[40px] max-h-[160px] scrollbar-thin scrollbar-track-transparent leading-relaxed",
                 isInternal && "placeholder:text-yellow-600/40 text-yellow-700 dark:text-yellow-400"
               )}
             />

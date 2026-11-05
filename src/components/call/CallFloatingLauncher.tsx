@@ -148,7 +148,7 @@ export function CallFloatingLauncher() {
       {/* Floating launcher bubble */}
       <div
         className={cn(
-          "fixed z-50 transition-all duration-300 ease-out",
+          "hidden md:block fixed z-50 transition-all duration-300 ease-out",
           // When Chat Express Dock window is open, slide left to avoid overlap!
           isChatDockOpen
             ? "bottom-4 md:bottom-6 right-4 md:right-[505px]"

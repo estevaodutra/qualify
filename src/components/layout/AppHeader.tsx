@@ -59,7 +59,7 @@ export function AppHeader() {
             <button
               type="button"
               onClick={() => navigate("/carteira/configuracoes")}
-              className="flex items-center gap-1.5 px-3 h-9 rounded-xl border border-border/50 bg-muted/30 text-[13px] font-bold text-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200 cursor-pointer"
+              className="hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-xl border border-border/50 bg-muted/30 text-[13px] font-bold text-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200 cursor-pointer"
             >
               <WalletIcon className="h-3.5 w-3.5 text-muted-foreground" />
               <span>

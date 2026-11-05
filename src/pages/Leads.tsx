@@ -1,4 +1,3 @@
-import { cn } from "@/lib/utils";
 import { useState, useMemo, useEffect } from "react";
 import { useLeads, Lead, LeadFilters } from "@/hooks/useLeads";
 import { useCallQueue } from "@/hooks/useCallQueue";
@@ -49,6 +48,7 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  MessageCircle,
 } from "lucide-react";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -320,13 +320,13 @@ export default function Leads() {
   };
 
   return (
-    <div className="flex flex-col gap-4 md:gap-6 p-3.5 md:p-8 overflow-y-auto flex-1 min-h-0 bg-background">
-      <div className="flex justify-between items-start">
-        <div>
+    <div className="flex w-full min-w-0 flex-col gap-4 md:gap-6 overflow-x-hidden bg-background">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+        <div className="min-w-0">
           <h1 className="text-[22px] font-semibold text-foreground tracking-tight m-0 font-['Sora']">Leads</h1>
           <p className="text-[14px] text-muted-foreground mt-1">Gerencie sua base de contatos</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-9 gap-1.5 px-3 font-medium text-[13px] bg-transparent border-border text-foreground shadow-none rounded-md">
@@ -370,14 +370,14 @@ export default function Leads() {
         onCancel={clearSelection}
       />
 
-      <div className="bg-card border border-border rounded-lg shadow-[0_1px_2px_hsl(220_15%_10%/0.05)] overflow-hidden flex flex-col">
+      <div className="min-w-0 bg-card border border-border rounded-lg shadow-[0_1px_2px_hsl(220_15%_10%/0.05)] overflow-hidden flex flex-col">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-2.5 px-4 py-3.5 border-b border-border">
-          <div className="relative flex-1 max-w-[280px]">
+          <div className="relative min-w-0 w-full sm:w-auto sm:flex-1 sm:max-w-[280px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               placeholder="Buscar leads..."
-              className="h-8 pl-8 text-[13px] bg-secondary border-transparent rounded-md focus-visible:ring-1 focus-visible:ring-primary shadow-none text-foreground"
+              className="h-8 pl-8 text-base md:text-[13px] bg-secondary border-transparent rounded-md focus-visible:ring-1 focus-visible:ring-primary shadow-none text-foreground"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
@@ -419,8 +419,61 @@ export default function Leads() {
           </Select>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto w-full">
+        {/* Mobile list keeps the primary details and actions inside the viewport. */}
+        <div className="divide-y divide-border md:hidden">
+          {isLoading ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">Carregando leads...</p>
+          ) : leads.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">Nenhum lead encontrado.</p>
+          ) : leads.map((lead) => (
+            <div key={lead.id} className="flex min-w-0 items-start gap-3 p-3">
+              <Checkbox
+                checked={selectedIds.has(lead.id)}
+                onCheckedChange={() => toggleSelect(lead.id)}
+                aria-label={`Selecionar ${lead.name || "lead"}`}
+                className="mt-1 shrink-0"
+              />
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="truncate text-sm font-semibold text-foreground">{lead.name || "Sem nome"}</p>
+                <p className="truncate text-xs text-muted-foreground">{lead.phone ? formatPhone(lead.phone) : lead.email || "Sem contato"}</p>
+                {lead.company_name && <p className="truncate text-xs text-muted-foreground">{lead.company_name}</p>}
+              </div>
+              {lead.phone && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-primary"
+                  aria-label={`Abrir conversa com ${lead.name || "lead"}`}
+                  onClick={() => {
+                    import("@/stores/chatExpress.store").then(({ useChatExpressStore }) => {
+                      useChatExpressStore.getState().openLeadSession({
+                        leadId: lead.id,
+                        leadName: lead.name,
+                        phone: lead.phone,
+                      });
+                    });
+                  }}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </Button>
+              )}
+              <LeadActionsMenu
+                lead={lead as any}
+                onEdit={() => setEditLead(lead)}
+                onHistory={() => setHistoryLead(lead)}
+                onShowLog={() => setLogLead(lead)}
+                onAddTag={() => { setSelectedIds(new Set([lead.id])); setTagDialogMode("add"); }}
+                onAddToCampaign={() => { setSelectedIds(new Set([lead.id])); setCampaignDialogOpen(true); }}
+                onAddToQueue={() => { setSelectedIds(new Set([lead.id])); setQueueOpen(true); }}
+                onBlock={() => updateLead.mutate({ id: lead.id, status: "blocked" })}
+                onDelete={() => deleteLead.mutate(lead.id)}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden min-w-0 overflow-x-auto w-full md:block">
           <table className="w-full border-collapse">
             <thead className="bg-secondary/50">
               <tr>
@@ -475,7 +528,7 @@ export default function Leads() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-secondary/30">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-3 border-t border-border bg-secondary/30">
             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
               Página {page} de {totalPages}
             </span>

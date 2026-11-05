@@ -550,7 +550,7 @@ export default function CriafyHub() {
   const primaryAccount = accounts[0] || null;
 
   return (
-    <div className="flex flex-col lg:flex-row h-full w-full overflow-hidden bg-background">
+    <div className="flex flex-col lg:flex-row h-full w-full min-w-0 overflow-hidden bg-background">
       {/* =========================================================
           SIDEBAR DESKTOP (Estilo Limpo c/ Grupos e Indicador Lateral)
          ========================================================= */}
@@ -773,7 +773,7 @@ export default function CriafyHub() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+        <div className="flex max-w-full items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
           {allSidebarItems.map((item) => {
             const isActive = activeModuleTab === item.id;
             const Icon = item.icon;
@@ -805,23 +805,23 @@ export default function CriafyHub() {
       {/* =========================================================
           ÁREA DE CONTEÚDO PRINCIPAL (Direita)
          ========================================================= */}
-      <div className="flex-1 min-w-0 h-full overflow-y-auto p-4 md:p-6 lg:p-8 scrollbar-thin">
+      <div className="flex-1 min-w-0 min-h-0 overflow-x-hidden overflow-y-auto p-3.5 md:p-6 lg:p-8 scrollbar-thin">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Header Contextual da Seção Ativa */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="p-2.5 rounded-xl bg-[#EEF0FD] dark:bg-primary/15 text-[#5856d6] dark:text-primary shrink-0">
                 <currentTabInfo.icon className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h1 className="text-xl font-bold tracking-tight text-foreground">
                     {currentTabInfo.label}
                   </h1>
                   {activeCompany?.name && (
                     <Badge
                       variant="outline"
-                      className="text-[10px] font-semibold bg-muted/50 text-muted-foreground border-border"
+                      className="max-w-full truncate text-[10px] font-semibold bg-muted/50 text-muted-foreground border-border"
                     >
                       {activeCompany.name}
                     </Badge>

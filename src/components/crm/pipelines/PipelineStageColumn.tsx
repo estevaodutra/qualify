@@ -75,7 +75,7 @@ export function PipelineStageColumn({
       <div 
         ref={setNodeRef}
         style={style}
-        className="flex flex-col h-full w-[min(300px,85vw)] shrink-0 bg-muted/50 rounded-xl border-2 border-dashed border-primary opacity-50"
+        className="flex flex-col min-h-48 w-full md:h-full md:w-[300px] shrink-0 bg-muted/50 rounded-xl border-2 border-dashed border-primary opacity-50"
       />
     );
   }
@@ -88,7 +88,7 @@ export function PipelineStageColumn({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "flex flex-col h-full w-[min(300px,85vw)] shrink-0 rounded-xl border transition-all duration-200",
+        "flex flex-col min-h-48 w-full md:h-full md:w-[300px] shrink-0 rounded-xl border transition-all duration-200",
         isDragOver
           ? "bg-primary/5 border-primary ring-2 ring-primary/40 shadow-lg"
           : "bg-muted/20 border-border/40"
@@ -109,7 +109,7 @@ export function PipelineStageColumn({
           </span>
         </div>
         
-        <div className="flex items-center gap-1 opacity-0 group-hover/stage:opacity-100 transition-opacity" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/stage:opacity-100 transition-opacity" onPointerDown={(e) => e.stopPropagation()}>
           <Button 
             variant="ghost" 
             size="icon" 
@@ -141,7 +141,7 @@ export function PipelineStageColumn({
       </div>
 
       {/* Deals List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-6 custom-scrollbar min-h-[120px]">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-6 custom-scrollbar min-h-[120px] max-md:max-h-[55dvh]">
         {deals?.length === 0 ? (
           <div className="h-full flex items-center justify-center p-4 border border-dashed border-border/30 rounded-xl text-[11px] text-muted-foreground/40 italic">
             Arraste um negócio para cá

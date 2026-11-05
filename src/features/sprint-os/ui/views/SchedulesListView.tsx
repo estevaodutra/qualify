@@ -114,9 +114,9 @@ export const SchedulesListView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-full bg-background text-foreground flex flex-col font-sans">
+    <div className="min-h-full w-full min-w-0 overflow-x-hidden bg-background text-foreground flex flex-col font-sans">
       {/* 1. Header Superior */}
-      <header className="px-8 py-6 border-b border-border bg-card/60 backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <header className="px-1 md:px-8 py-4 md:py-6 border-b border-border bg-card/60 backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
@@ -132,12 +132,12 @@ export const SchedulesListView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           {/* Alternador de visualização: Meus Cronogramas vs Templates */}
-          <div className="flex items-center p-1 rounded-xl bg-muted border border-border text-xs">
+          <div className="flex max-w-full items-center p-1 rounded-xl bg-muted border border-border text-xs">
             <button
               onClick={() => setActiveTab("schedules")}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`min-w-0 px-2 md:px-3 py-1.5 rounded-lg font-medium transition-all ${
                 activeTab === "schedules" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -145,7 +145,7 @@ export const SchedulesListView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab("templates")}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`min-w-0 px-2 md:px-3 py-1.5 rounded-lg font-medium transition-all ${
                 activeTab === "templates" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -164,7 +164,7 @@ export const SchedulesListView: React.FC = () => {
       </header>
 
       {/* 2. Conteúdo Principal */}
-      <main className="flex-1 px-8 py-8 max-w-7xl w-full mx-auto">
+      <main className="flex-1 min-w-0 px-1 md:px-8 py-5 md:py-8 max-w-7xl w-full mx-auto">
         {activeTab === "schedules" ? (
           <div>
             {workspacesList.length === 0 ? (

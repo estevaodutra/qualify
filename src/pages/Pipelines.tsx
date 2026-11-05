@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Deal, Pipeline, PipelineGroup, PipelineStage } from "@/types/crm.types";
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { PanelLeft } from "lucide-react";
 
 export default function Pipelines() {
+  const isMobile = useIsMobile();
   const { activeCompany } = useCompany();
   const queryClient = useQueryClient();
   
@@ -452,8 +454,8 @@ export default function Pipelines() {
               onToggleSidebar={toggleSidebar}
             />
             
-            <div className="flex-1 overflow-x-auto overflow-y-auto p-3 md:p-6 pb-8 bg-muted/10 overscroll-x-contain">
-              <div className="flex h-full items-start gap-4" style={{ minWidth: "max-content" }}>
+            <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden md:overflow-x-auto p-3 md:p-6 pb-8 bg-muted/10 overscroll-x-contain">
+              <div className="flex w-full flex-col md:w-max md:flex-row items-start gap-4 md:h-full">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -461,7 +463,7 @@ export default function Pipelines() {
                 >
                   <SortableContext
                     items={orderedStages.map(s => s.id)}
-                    strategy={horizontalListSortingStrategy}
+                    strategy={isMobile ? verticalListSortingStrategy : horizontalListSortingStrategy}
                   >
                     {orderedStages.map(stage => (
                       <PipelineStageColumn 
@@ -514,7 +516,7 @@ export default function Pipelines() {
                   <button 
                     type="button"
                     onClick={() => setCreateStageOpen(true)}
-                    className="flex-shrink-0 w-[min(300px,85vw)] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors cursor-pointer"
+                    className="flex-shrink-0 w-full md:w-[300px] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors cursor-pointer"
                   >
                     + Nova Etapa
                   </button>

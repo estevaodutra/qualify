@@ -158,9 +158,9 @@ export const ExecutiveHeader: React.FC = () => {
   };
 
   return (
-    <header className="border-b border-border bg-card/80 backdrop-blur-xl px-6 py-3.5 sticky top-0 z-30 flex items-center justify-between gap-4 text-card-foreground">
+    <header className="border-b border-border bg-card/80 backdrop-blur-xl px-1 md:px-6 py-3.5 sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 md:gap-4 text-card-foreground min-w-0">
       {/* Lado Esquerdo: Voltar + Títulos Editáveis */}
-      <div className="flex items-center gap-3.5 min-w-0">
+      <div className="flex w-full md:w-auto md:flex-1 items-center gap-2 md:gap-3.5 min-w-0">
         <Button
           variant="ghost"
           size="sm"
@@ -175,7 +175,7 @@ export const ExecutiveHeader: React.FC = () => {
         <div className="h-4 w-[1px] bg-border shrink-0" />
 
         {isEditingTitle ? (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Input
               value={editedProjectName}
               onChange={(e) => setEditedProjectName(e.target.value)}
@@ -185,7 +185,7 @@ export const ExecutiveHeader: React.FC = () => {
                 if (e.key === "Escape") setIsEditingTitle(false);
               }}
               placeholder="Projeto"
-              className="h-7 text-xs bg-background border-input text-foreground rounded-lg w-36"
+              className="h-7 text-base md:text-xs bg-background border-input text-foreground rounded-lg w-28 md:w-36"
               autoFocus
             />
             <span className="text-muted-foreground text-xs">/</span>
@@ -198,7 +198,7 @@ export const ExecutiveHeader: React.FC = () => {
                 if (e.key === "Escape") setIsEditingTitle(false);
               }}
               placeholder="Nome do Cronograma"
-              className="h-7 text-xs bg-background border-input text-foreground rounded-lg w-48 font-bold"
+              className="h-7 text-base md:text-xs bg-background border-input text-foreground rounded-lg w-32 md:w-48 font-bold"
             />
             <Button
               size="icon"
@@ -213,7 +213,7 @@ export const ExecutiveHeader: React.FC = () => {
           <div
             onDoubleClick={handleStartEdit}
             onClick={handleStartEdit}
-            className="group flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity truncate"
+            className="group flex min-w-0 items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity truncate"
             title="Dois cliques para renomear"
           >
             <div className="truncate">
@@ -227,7 +227,7 @@ export const ExecutiveHeader: React.FC = () => {
             <Edit2 className="h-3 w-3 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
             <Badge
               variant="outline"
-              className={`text-[9px] font-semibold px-2 py-0 rounded-full shrink-0 ml-1 ${
+              className={`hidden sm:inline-flex text-[9px] font-semibold px-2 py-0 rounded-full shrink-0 ml-1 ${
                 isActivated
                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                   : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
@@ -242,7 +242,7 @@ export const ExecutiveHeader: React.FC = () => {
                 navigator.clipboard.writeText(workspace.project.id);
                 toast.success(`ID copiado: ${workspace.project.id}`);
               }}
-              className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground/80 hover:text-foreground bg-muted/60 hover:bg-muted px-2 py-0.5 rounded-md border border-border/50 transition-colors cursor-pointer shrink-0 ml-1"
+              className="hidden sm:flex items-center gap-1 font-mono text-[10px] text-muted-foreground/80 hover:text-foreground bg-muted/60 hover:bg-muted px-2 py-0.5 rounded-md border border-border/50 transition-colors cursor-pointer shrink-0 ml-1"
               title={`Clique para copiar o ID: ${workspace.project.id}`}
             >
               <span className="text-[9px] text-muted-foreground/60 font-sans font-bold">ID</span>
@@ -253,7 +253,7 @@ export const ExecutiveHeader: React.FC = () => {
       </div>
 
       {/* Centro: Visualização Operacional + Atalho para Manual da Marca no Criafy */}
-      <div className="flex items-center p-0.5 bg-muted/60 border border-border/80 rounded-2xl gap-1 shrink-0 overflow-x-auto">
+      <div className="flex max-w-full min-w-0 items-center p-0.5 bg-muted/60 border border-border/80 rounded-2xl gap-1 overflow-x-auto">
         {/* Aba Operação */}
         <button
           onClick={() => setActiveTab("kanban")}
@@ -277,7 +277,7 @@ export const ExecutiveHeader: React.FC = () => {
       </div>
 
       {/* Lado Direito: Minhas Demandas (Filtro de Atribuição) + Atualizar Prazos + Menu "••• Mais opções" */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-2.5">
         {/* Filtro Rápido de Atribuição: "Minhas Demandas" */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

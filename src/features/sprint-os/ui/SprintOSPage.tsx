@@ -267,21 +267,21 @@ export const SprintOSPage: React.FC = () => {
 
   // 2. CRONOGRAMA ABERTO -> COCKPIT OPERACIONAL 80/20 (Seção 6)
   return (
-    <div className="min-h-full bg-background text-foreground flex flex-col font-sans pb-16">
+    <div className="min-h-full w-full min-w-0 overflow-x-hidden bg-background text-foreground flex flex-col font-sans pb-6 md:pb-16">
       {/* Região 1: Cabeçalho Compacto (Linear Style) */}
       <ExecutiveHeader />
 
       {/* Alternância de Visualização Principal: 4 Abas Principais (AJ-021) */}
       {activeTab === "brand_manual" ? (
-        <main className="px-6 pt-4 flex-1">
+        <main className="min-w-0 px-1 md:px-6 pt-4 flex-1">
           <BrandManualView />
         </main>
       ) : activeTab === "creatives" ? (
-        <main className="px-6 pt-4 flex-1">
+        <main className="min-w-0 px-1 md:px-6 pt-4 flex-1">
           <CreativesView />
         </main>
       ) : activeTab === "scripts_and_audios" ? (
-        <main className="px-6 pt-4 flex-1">
+        <main className="min-w-0 px-1 md:px-6 pt-4 flex-1">
           <ScriptsAndAudiosView />
         </main>
       ) : (
@@ -290,7 +290,7 @@ export const SprintOSPage: React.FC = () => {
           <ModularDashboard />
 
           {/* Visualização Principal: Apenas Kanban */}
-          <main className="px-6 pt-2 flex-1">
+          <main className="min-w-0 px-1 md:px-6 pt-2 flex-1">
             <KanbanView />
           </main>
         </>

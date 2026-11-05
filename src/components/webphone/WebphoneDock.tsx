@@ -95,7 +95,7 @@ export const WebphoneDock: React.FC = () => {
     <>
       {/* Banner de Aviso de Aba Secundária */}
       {!isPrimaryTab && (
-        <div className="fixed bottom-20 right-6 z-50 bg-amber-500/90 text-amber-950 px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-3 backdrop-blur-sm border border-amber-400">
+        <div className="hidden md:flex fixed bottom-20 right-6 z-50 bg-amber-500/90 text-amber-950 px-4 py-2.5 rounded-lg shadow-xl items-center gap-3 backdrop-blur-sm border border-amber-400">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
           <div className="text-xs">
             <p className="font-semibold">Webphone ativo em outra aba</p>
@@ -110,7 +110,7 @@ export const WebphoneDock: React.FC = () => {
       {/* Dock Principal do Webphone */}
       <div
         className={cn(
-          "fixed bottom-6 right-6 z-50 transition-all duration-300 shadow-2xl rounded-2xl border bg-card/95 backdrop-blur-md overflow-hidden",
+          "hidden md:block fixed bottom-6 right-6 z-50 transition-all duration-300 shadow-2xl rounded-2xl border bg-card/95 backdrop-blur-md overflow-hidden",
           isCallActive || isExpanded ? "w-80" : "w-auto min-w-[260px]",
           status === "in_call" && "border-emerald-500/60 shadow-emerald-500/10",
           status === "ringing" && "border-amber-500/60 shadow-amber-500/10 animate-pulse",

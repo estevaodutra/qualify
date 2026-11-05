@@ -439,7 +439,7 @@ export default function Chat() {
         selectedConvId ? "hidden md:block" : "block"
       )}>
         {isConversationsLoading || isOperatorsLoading ? (
-          <div className="h-full flex items-center justify-center bg-card/5">
+          <div className="h-full min-w-0 flex items-center justify-center bg-card/5">
             <div className="text-center space-y-2">
               <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
               <p className="text-xs text-muted-foreground font-semibold">Carregando Inbox...</p>
@@ -464,7 +464,7 @@ export default function Chat() {
 
       {/* 2. Chat Stream Column (Middle) */}
       <div className={cn(
-        "flex-1 flex flex-col h-full bg-card/5 overflow-hidden relative min-w-0",
+        "flex-1 flex flex-col h-full min-h-0 bg-card/5 overflow-hidden relative min-w-0",
         !selectedConvId ? "hidden md:flex" : "flex"
       )}>
         {isCopilotActive ? (
@@ -472,7 +472,7 @@ export default function Chat() {
         ) : selectedConv ? (
           <>
             {/* Header info */}
-            <div className="p-3 px-3.5 md:p-3.5 md:px-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
+            <div className="min-w-0 p-2.5 md:p-3.5 md:px-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                 {/* Mobile back button ← */}
                 <button 
@@ -590,7 +590,7 @@ export default function Chat() {
                         <>
                           <span
                             className={cn(
-                              "text-[11px] font-mono leading-none transition-colors",
+                              "max-w-full truncate text-[11px] font-mono leading-none transition-colors",
                               isGroup
                                 ? "text-purple-600 dark:text-purple-400 font-semibold cursor-pointer hover:underline hover:text-purple-700 dark:hover:text-purple-300"
                                 : "text-muted-foreground"

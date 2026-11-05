@@ -190,7 +190,7 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list, index 
       ref={setNodeRef}
       style={style}
       className={cn(
-        "w-80 shrink-0 flex flex-col max-h-full rounded-3xl border shadow-xs transition-all backdrop-blur-sm",
+        "w-full md:w-80 shrink-0 flex flex-col max-h-[60dvh] md:max-h-full rounded-3xl border shadow-xs transition-all backdrop-blur-sm",
         theme.containerBg,
         isDragging && "opacity-50 ring-2 ring-primary"
       )}
