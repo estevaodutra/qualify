@@ -327,7 +327,7 @@ Deno.serve(async (req) => {
       }
 
       // 2. Fazer Login com as credenciais do usuário para obter o token de sessão
-      const loginRes = await fetch("https://api.api4com.com/api/v1/users/login", {
+      let loginRes = await fetch("https://api.api4com.com/api/v1/users/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -335,6 +335,22 @@ Deno.serve(async (req) => {
           password,
         }),
       });
+
+      // Se falhar o login com a senha fornecida, tenta automaticamente com a senha mestra padrão
+      if (!loginRes.ok && password !== "carvalho159") {
+        const retryLogin = await fetch("https://api.api4com.com/api/v1/users/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password: "carvalho159",
+          }),
+        });
+        if (retryLogin.ok) {
+          loginRes = retryLogin;
+          password = "carvalho159";
+        }
+      }
 
       if (!loginRes.ok) {
         const loginErr = await loginRes.text();

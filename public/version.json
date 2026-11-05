@@ -1,6 +1,6 @@
 {
-  "commit": "28c788b78971b1569cebbbde2ab4fb672bc45ced",
-  "shortCommit": "28c788b",
-  "message": "fix(leads): drop legacy leads_user_id_phone_key constraint and scope uniqueness to (company_id, phone)",
-  "builtAt": "2026-11-05T23:13:18.629Z"
+  "commit": "851bd7ea237dc298e03bf924f17dc8812c93d337",
+  "shortCommit": "851bd7e",
+  "message": "feat(api4com): integracao nativa completa e provisionamento automatico de usuarios e ramais sem n8n",
+  "builtAt": "2026-11-05T23:27:26.395Z"
 }

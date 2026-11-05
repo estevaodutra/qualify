@@ -506,8 +506,18 @@ export function useGenerateUserApi4comToken() {
         },
       });
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || error?.message || "Falha ao gerar conta/token na API4COM");
+      if (error) {
+        let msg = error.message;
+        try {
+          if ((error as any).context) {
+            const body = await (error as any).context.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch (_) {}
+        throw new Error(msg || "Falha ao gerar conta/token na API4COM");
+      }
+      if (!data?.success) {
+        throw new Error(data?.error || "Falha ao gerar conta/token na API4COM");
       }
       return data;
     },
