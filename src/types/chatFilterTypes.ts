@@ -75,6 +75,9 @@ export interface AdvancedChatFilters {
   // 13. Tipo de Conversa (Todas / Leads Privados / Grupos)
   conversationType?: "all" | "individual" | "group";
 
+  // 13.1. Favoritas
+  favoritesOnly?: boolean;
+
   // 14. Pasta de Grupos (Filtro por pasta de grupo)
   groupFolderId?: string | null;
 
@@ -100,6 +103,7 @@ export const DEFAULT_ADVANCED_CHAT_FILTERS: AdvancedChatFilters = {
   unreadMode: "all",
   archiveMode: "active_only",
   conversationType: "all",
+  favoritesOnly: false,
   groupFolderId: null,
   sortBy: "last_message_desc",
   search: "",

@@ -6,6 +6,28 @@ import { toast } from "sonner";
 
 const LOCAL_PINS_KEY = (companyId: string, userId: string) => `qualify_pins_${companyId}_${userId}`;
 const LOCAL_ARCHIVED_KEY = (companyId: string) => `qualify_archived_${companyId}`;
+const LOCAL_FAVORITES_KEY = (companyId: string, userId: string) => `qualify_favorites_${companyId}_${userId}`;
+
+export function getLocalFavorites(companyId: string, userId: string): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_FAVORITES_KEY(companyId, userId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalFavorite(companyId: string, userId: string, convId: string) {
+  const current = getLocalFavorites(companyId, userId);
+  if (!current.includes(convId)) {
+    localStorage.setItem(LOCAL_FAVORITES_KEY(companyId, userId), JSON.stringify([...current, convId]));
+  }
+}
+
+export function removeLocalFavorite(companyId: string, userId: string, convId: string) {
+  const current = getLocalFavorites(companyId, userId);
+  localStorage.setItem(LOCAL_FAVORITES_KEY(companyId, userId), JSON.stringify(current.filter(id => id !== convId)));
+}
 
 export function getLocalPins(companyId: string, userId: string): string[] {
   try {
@@ -58,6 +80,7 @@ export function useConversationActions() {
     queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
     queryClient.invalidateQueries({ queryKey: ["chat-archived-count"] });
     queryClient.invalidateQueries({ queryKey: ["chat-pins"] });
+    queryClient.invalidateQueries({ queryKey: ["chat-favorites"] });
     queryClient.invalidateQueries({ queryKey: ["chat-muted-conversations"] });
   };
 
@@ -412,6 +435,25 @@ export function useConversationActions() {
     },
   });
 
+  // Favorite / Unfavorite Conversation
+  const favoriteMutation = useMutation({
+    mutationFn: async ({ conversationId, isFavorite }: { conversationId: string; isFavorite: boolean }) => {
+      if (!activeCompanyId || !user) throw new Error("Usuário ou empresa não selecionada");
+      if (isFavorite) {
+        saveLocalFavorite(activeCompanyId, user.id, conversationId);
+      } else {
+        removeLocalFavorite(activeCompanyId, user.id, conversationId);
+      }
+    },
+    onSuccess: (_, { isFavorite }) => {
+      toast.success(isFavorite ? "Conversa adicionada aos favoritos!" : "Conversa removida dos favoritos.");
+      invalidateChatQueries();
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao atualizar favoritos: ${err.message}`);
+    },
+  });
+
   return {
     pinConversation: pinMutation.mutateAsync,
     unpinConversation: unpinMutation.mutateAsync,
@@ -420,6 +462,7 @@ export function useConversationActions() {
     archiveConversation: archiveMutation.mutateAsync,
     unarchiveConversation: unarchiveMutation.mutateAsync,
     setConversationMuted: muteMutation.mutateAsync,
+    toggleFavoriteConversation: favoriteMutation.mutateAsync,
     createLeadFromConversation: createLeadMutation.mutateAsync,
     deleteConversation: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
@@ -432,6 +475,7 @@ export function useConversationActions() {
       archiveMutation.isPending ||
       unarchiveMutation.isPending ||
       muteMutation.isPending ||
+      favoriteMutation.isPending ||
       createLeadMutation.isPending ||
       deleteMutation.isPending,
   };

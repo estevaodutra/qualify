@@ -15,9 +15,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Pin, PinOff, Mail, CheckCircle2, Archive, ArchiveRestore, Bell, BellOff, MoreVertical, Loader2, Trash2 } from "lucide-react";
+import { Pin, PinOff, Mail, CheckCircle2, Archive, ArchiveRestore, Bell, BellOff, MoreVertical, Loader2, Trash2, Star, Tag } from "lucide-react";
 import { ChatConversation } from "@/hooks/useChat";
 import { useConversationActions } from "@/hooks/useConversationActions";
+import { TagSelectorPopover } from "@/components/chat/tags/TagSelectorPopover";
 
 interface ConversationActionsMenuProps {
   conversation: ChatConversation;
@@ -25,6 +26,7 @@ interface ConversationActionsMenuProps {
   align?: "start" | "end" | "center";
   className?: string;
   onActionComplete?: () => void;
+  onOpenTagSelector?: () => void;
 }
 
 export default function ConversationActionsMenu({
@@ -33,8 +35,10 @@ export default function ConversationActionsMenu({
   align = "end",
   className,
   onActionComplete,
+  onOpenTagSelector,
 }: ConversationActionsMenuProps) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const {
     pinConversation,
     unpinConversation,
@@ -43,6 +47,7 @@ export default function ConversationActionsMenu({
     archiveConversation,
     unarchiveConversation,
     setConversationMuted,
+    toggleFavoriteConversation,
     deleteConversation,
     isDeleting,
     isPending,
@@ -84,6 +89,17 @@ export default function ConversationActionsMenu({
     } catch (err) { return; }
   };
 
+  const handleFavoriteToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await toggleFavoriteConversation({
+        conversationId: conversation.id,
+        isFavorite: !conversation.is_favorite,
+      });
+      onActionComplete?.();
+    } catch (err) { return; }
+  };
+
   const handleMuteToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -116,8 +132,26 @@ export default function ConversationActionsMenu({
             </Button>
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align={align} className="w-52 rounded-xl p-1.5 z-[10000] shadow-xl">
-          {/* 1. Pin / Unpin */}
+        <DropdownMenuContent align={align} className="w-52 rounded-xl p-1.5 z-[10000] shadow-xl bg-card border border-border">
+          {/* 1. Arquivar / Desarquivar */}
+          <DropdownMenuItem
+            onClick={handleArchiveToggle}
+            className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5"
+          >
+            {conversation.is_archived ? (
+              <>
+                <ArchiveRestore className="h-4 w-4 text-purple-500 shrink-0" />
+                <span>Desarquivar</span>
+              </>
+            ) : (
+              <>
+                <Archive className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span>Arquivar</span>
+              </>
+            )}
+          </DropdownMenuItem>
+
+          {/* 2. Fixar / Desafixar */}
           <DropdownMenuItem
             onClick={handlePinToggle}
             className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5"
@@ -125,17 +159,17 @@ export default function ConversationActionsMenu({
             {conversation.is_pinned ? (
               <>
                 <PinOff className="h-4 w-4 text-amber-500 shrink-0" />
-                <span>Desafixar conversa</span>
+                <span>Desafixar</span>
               </>
             ) : (
               <>
                 <Pin className="h-4 w-4 text-amber-500 shrink-0" />
-                <span>Fixar conversa</span>
+                <span>Fixar</span>
               </>
             )}
           </DropdownMenuItem>
 
-          {/* 2. Read / Unread */}
+          {/* 3. Marcar como lida / não lida */}
           <DropdownMenuItem
             onClick={handleReadToggle}
             className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5"
@@ -153,39 +187,47 @@ export default function ConversationActionsMenu({
             )}
           </DropdownMenuItem>
 
-          <DropdownMenuSeparator className="my-1 border-border/40" />
-
-          {/* 3. Archive / Unarchive */}
+          {/* 4. Favoritar / Desfavoritar */}
           <DropdownMenuItem
-            onClick={handleArchiveToggle}
-            className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5 text-slate-700 dark:text-slate-200"
-          >
-            {conversation.is_archived ? (
-              <>
-                <ArchiveRestore className="h-4 w-4 text-purple-500 shrink-0" />
-                <span>Desarquivar conversa</span>
-              </>
-            ) : (
-              <>
-                <Archive className="h-4 w-4 text-purple-500 shrink-0" />
-                <span>Arquivar conversa</span>
-              </>
-            )}
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator className="my-1 border-border/40" />
-
-          <DropdownMenuItem
-            onClick={handleMuteToggle}
+            onClick={handleFavoriteToggle}
             className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5"
           >
-            {conversation.is_muted ? <Bell className="h-4 w-4 text-purple-500 shrink-0" /> : <BellOff className="h-4 w-4 text-purple-500 shrink-0" />}
+            <Star className={`h-4 w-4 shrink-0 ${conversation.is_favorite ? "text-amber-500 fill-amber-500" : "text-muted-foreground"}`} />
+            <span>{conversation.is_favorite ? "Desfavoritar" : "Favoritar"}</span>
+          </DropdownMenuItem>
+
+          {/* 5. Etiquetar */}
+          {conversation.lead_id ? (
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onOpenTagSelector) {
+                  onOpenTagSelector();
+                } else {
+                  setTagPopoverOpen(true);
+                }
+              }}
+              className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5"
+            >
+              <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span>Etiquetar</span>
+            </DropdownMenuItem>
+          ) : null}
+
+          <DropdownMenuSeparator className="my-1 border-border/40" />
+
+          {/* Silenciar */}
+          <DropdownMenuItem
+            onClick={handleMuteToggle}
+            className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5 text-muted-foreground"
+          >
+            {conversation.is_muted ? <Bell className="h-4 w-4 text-purple-500 shrink-0" /> : <BellOff className="h-4 w-4 text-muted-foreground shrink-0" />}
             <span>{conversation.is_muted ? "Ativar notificações" : "Silenciar notificações"}</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="my-1 border-border/40" />
 
-          {/* 4. Delete Conversation */}
+          {/* Apagar Conversa */}
           <DropdownMenuItem
             onClick={(e) => {
               e.stopPropagation();
@@ -198,6 +240,16 @@ export default function ConversationActionsMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Hidden popover for TagSelector when opened from menu */}
+      {conversation.lead_id && (
+        <TagSelectorPopover
+          leadId={conversation.lead_id}
+          currentTags={conversation.lead?.tags || conversation.tags || []}
+          trigger={<span className="hidden" />}
+          align="start"
+        />
+      )}
 
       {/* Confirmation Dialog for Deleting Conversation */}
       <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>

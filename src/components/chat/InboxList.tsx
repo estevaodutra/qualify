@@ -1,5 +1,26 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Search, Filter, MessageSquare, Clock, User, CheckCircle, HelpCircle, Loader2, Settings, Info, CheckSquare, Zap } from "lucide-react";
+import {
+  Search,
+  Filter,
+  MessageSquare,
+  Clock,
+  User,
+  HelpCircle,
+  Loader2,
+  Settings,
+  Info,
+  CheckSquare,
+  Zap,
+  Pin,
+  Archive,
+  Users,
+  Folder,
+  Sparkles,
+  ChevronRight,
+  ChevronDown,
+  Star,
+  MoreVertical,
+} from "lucide-react";
 import QuickRepliesManagerModal from "@/components/chat/quick-replies/QuickRepliesManagerModal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +35,13 @@ import ActiveFilterChips from "./filters/ActiveFilterChips";
 import ConversationActionsMenu from "./actions/ConversationActionsMenu";
 import BatchWorkflowDispatchDialog from "./batch/BatchWorkflowDispatchDialog";
 import { Button } from "@/components/ui/button";
-import { Pin, Archive, Inbox, Users, Folder, Sparkles } from "lucide-react";
 import { useGroupFolders } from "@/hooks/useGroupFolders";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface InboxListProps {
   conversations: ChatConversation[];
@@ -31,10 +57,64 @@ interface InboxListProps {
   archivedCount?: number;
 }
 
-export default function InboxList({ 
-  conversations, 
-  selectedId, 
-  onSelect, 
+// Generate pastel monogram initials and color
+function getAvatarInfo(name: string, isGroup: boolean) {
+  const clean = name.replace(/[^\w\sÀ-ú]/gi, "").trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  let initials = "";
+  if (parts.length >= 2) {
+    initials = (parts[0][0] + parts[1][0]).toUpperCase();
+  } else if (parts.length === 1 && parts[0].length >= 2) {
+    initials = parts[0].substring(0, 2).toUpperCase();
+  } else if (parts.length === 1) {
+    initials = parts[0].substring(0, 1).toUpperCase();
+  } else {
+    initials = isGroup ? "GP" : "CT";
+  }
+
+  // Consistent pleasant pastel hues
+  const colors = [
+    "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300",
+    "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300",
+    "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
+    "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/60 dark:text-fuchsia-300",
+    "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+  ];
+
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colorClass = colors[Math.abs(hash) % colors.length];
+
+  return { initials, colorClass };
+}
+
+// Format message preview timestamp
+function formatMessageTime(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    const now = new Date();
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    if (isToday) {
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+export default function InboxList({
+  conversations,
+  selectedId,
+  onSelect,
   operators,
   instances = [],
   filters,
@@ -45,7 +125,7 @@ export default function InboxList({
   archivedCount = 0,
 }: InboxListProps) {
   const { user } = useAuth();
-  
+
   // Search & Filter State
   const [localSearch, setLocalSearch] = useState((filters as AdvancedChatFilters).search || "");
   const [sortBy, setSortBy] = useState<"recent" | "waiting">("recent");
@@ -53,20 +133,29 @@ export default function InboxList({
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const { folders: groupFolders = [] } = useGroupFolders();
 
+  // Active top quick pill: "all" | "unread" | "favorites" | "groups"
+  const [activePill, setActivePill] = useState<"all" | "unread" | "favorites" | "groups">(() => {
+    const adv = filters as AdvancedChatFilters;
+    if (adv.favoritesOnly) return "favorites";
+    if (adv.unreadMode === "unread_only") return "unread";
+    if (adv.conversationType === "group") return "groups";
+    return "all";
+  });
+
   // Bulk Selection State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedConvIds, setSelectedConvIds] = useState<Set<string>>(new Set());
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
 
   const activeCategoryCount = getActiveCategoryCount(filters as AdvancedChatFilters);
-  
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       if (filters.search !== localSearch) {
         setFilters({ ...filters, search: localSearch });
       }
-    }, 500);
+    }, 450);
     return () => clearTimeout(timer);
   }, [localSearch, filters, setFilters]);
 
@@ -75,7 +164,7 @@ export default function InboxList({
 
   useEffect(() => {
     if (isFetchingNextPage || !hasNextPage) return;
-    
+
     if (observerRef.current) observerRef.current.disconnect();
 
     observerRef.current = new IntersectionObserver((entries) => {
@@ -98,16 +187,15 @@ export default function InboxList({
     const wait = new Date(waitingSince);
     const diffMs = now.getTime() - wait.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return "Agora mesmo";
-    if (diffMins < 60) return `${diffMins}m`;
+
+    if (diffMins < 1) return "Agora";
+    if (diffMins < 60) return `${diffMins}min`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h`;
     return `${Math.floor(diffHours / 24)}d`;
   };
 
   // Group conversations by lead_id so each lead appears ONLY ONCE in the Inbox list.
-  // Group conversations are kept unique by their JID so different groups are never collapsed.
   const sortedConversations = useMemo(() => {
     const map = new Map<string, {
       primary: ChatConversation;
@@ -143,8 +231,8 @@ export default function InboxList({
       }
     });
 
-    const list = Array.from(map.values()).map(item => {
-      const instanceCount = new Set(item.all.map(c => c.instance_id).filter(Boolean)).size;
+    const list = Array.from(map.values()).map((item) => {
+      const instanceCount = new Set(item.all.map((c) => c.instance_id).filter(Boolean)).size;
       return {
         ...item.primary,
         unread_count: item.totalUnread,
@@ -190,207 +278,524 @@ export default function InboxList({
     return sortedConversations.filter((c) => selectedConvIds.has(c.id));
   }, [sortedConversations, selectedConvIds]);
 
-  // Compute total counts for type tabs
-  const { totalGroupsCount, totalIndividualCount } = useMemo(() => {
+  // Compute counts for pill badges:
+  // unread count (conversations with unread > 0)
+  // groups count (conversations that are groups)
+  const { totalGroupsCount, totalUnreadConvsCount } = useMemo(() => {
     let groups = 0;
-    let individual = 0;
-    conversations.forEach((conv) => {
+    let unread = 0;
+    sortedConversations.forEach((conv) => {
       const p = conv.lead?.phone || conv.contact_phone || "";
       const c = (conv.lead?.custom_fields as Record<string, any>) || {};
       const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
       if (isGrp) groups++;
-      else individual++;
+      if (conv.unread_count > 0) unread++;
     });
-    return { totalGroupsCount: groups, totalIndividualCount: individual };
-  }, [conversations]);
+    return { totalGroupsCount: groups, totalUnreadConvsCount: unread };
+  }, [sortedConversations]);
 
-  const currentConvType = (filters as AdvancedChatFilters).conversationType || "all";
+  // Handle Quick Pill Selection (Tudo | Não lidas | Favoritas | Grupos)
+  const handlePillSelect = (pill: "all" | "unread" | "favorites" | "groups") => {
+    setActivePill(pill);
+    const adv = { ...(filters as AdvancedChatFilters) };
 
-  return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-card/10 border-r border-border/40">
-      {/* Header Search & Sort */}
-      <div className="p-4 border-b border-border/40 space-y-3 shrink-0">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-            Caixa de Entrada
-          </h2>
-          <button
-            onClick={() => setIsManagerOpen(true)}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
-            title="Respostas Rápidas"
+    if (pill === "all") {
+      adv.conversationType = "all";
+      adv.unreadMode = "all";
+      adv.favoritesOnly = false;
+      adv.groupFolderId = null;
+    } else if (pill === "unread") {
+      adv.conversationType = "all";
+      adv.unreadMode = "unread_only";
+      adv.favoritesOnly = false;
+      adv.groupFolderId = null;
+    } else if (pill === "favorites") {
+      adv.conversationType = "all";
+      adv.unreadMode = "all";
+      adv.favoritesOnly = true;
+      adv.groupFolderId = null;
+    } else if (pill === "groups") {
+      adv.conversationType = "group";
+      adv.unreadMode = "all";
+      adv.favoritesOnly = false;
+    }
+
+    setFilters(adv);
+  };
+
+  // Separate pinned conversations vs normal conversations
+  const { pinnedConversations, normalConversations } = useMemo(() => {
+    const pinned: typeof sortedConversations = [];
+    const normal: typeof sortedConversations = [];
+
+    sortedConversations.forEach((c) => {
+      if (c.is_pinned) pinned.push(c);
+      else normal.push(c);
+    });
+
+    return { pinnedConversations: pinned, normalConversations: normal };
+  }, [sortedConversations]);
+
+  const isArchivedActive = (filters as AdvancedChatFilters).archiveMode === "archived_only";
+
+  // Render a single conversation row card
+  const renderConversationItem = (conv: typeof sortedConversations[0]) => {
+    const isSelected = !isSelectionMode && (conv.id === selectedId || (conv.allLeadConversations && conv.allLeadConversations.some((c: any) => c.id === selectedId)));
+    const isChecked = selectedConvIds.has(conv.id);
+    const waitTime = getWaitTime(conv.waiting_since);
+
+    const phone = conv.lead?.phone || conv.contact_phone || "";
+    const customF = (conv.lead?.custom_fields as Record<string, any>) || {};
+    const isGrp = phone.length > 15 || phone.includes("@g.us") || phone.includes("-group") || customF.is_group === true;
+
+    const displayName =
+      conv.lead?.name?.trim() ||
+      (conv.contact_name && conv.contact_name !== "Grupo" ? conv.contact_name.trim() : null) ||
+      (isGrp ? "Grupo WhatsApp" : phone || "Contato Sem Nome");
+
+    const avatarUrl =
+      (conv as any).group_photo_url ||
+      customF.profile_picture_url ||
+      customF.pictureUrl ||
+      customF.group_photo_url ||
+      null;
+
+    const { initials, colorClass } = getAvatarInfo(displayName, isGrp);
+    const messageTime = formatMessageTime(conv.last_message_at);
+
+    // Green badge for unread in groups or normal purple
+    const isGreenBadge = isGrp && conv.unread_count > 0;
+
+    return (
+      <div
+        key={conv.id}
+        onClick={() => {
+          if (isSelectionMode) {
+            toggleSelectConversation(conv.id);
+          } else {
+            onSelect(conv.id);
+          }
+        }}
+        className={cn(
+          "px-3.5 py-3 flex items-center gap-3 cursor-pointer select-none transition-all duration-150 group relative border-b border-border/30",
+          isSelected ? "bg-primary/10 border-l-[3px] border-l-primary" : "hover:bg-muted/40 bg-transparent",
+          isSelectionMode && isChecked ? "bg-primary/10 border-l-[3px] border-l-primary font-medium" : "",
+          conv.unread_count > 0 && !isSelected && "bg-primary/[0.02]"
+        )}
+      >
+        {/* Selection Checkbox */}
+        {isSelectionMode && (
+          <div
+            className="shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleSelectConversation(conv.id);
+            }}
           >
-            <Settings className="h-4 w-4" />
-          </button>
+            <Checkbox
+              checked={isChecked}
+              onCheckedChange={() => toggleSelectConversation(conv.id)}
+              className="data-[state=checked]:bg-primary h-4 w-4 rounded-sm border-border/80"
+            />
+          </div>
+        )}
+
+        {/* Avatar */}
+        <div className="shrink-0 relative">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={displayName}
+              className={cn(
+                "h-11 w-11 object-cover shadow-2xs border border-border/40",
+                isGrp ? "rounded-full" : "rounded-2xl"
+              )}
+            />
+          ) : (
+            <div
+              className={cn(
+                "h-11 w-11 flex items-center justify-center font-bold text-sm tracking-tight shadow-2xs select-none",
+                isGrp ? "rounded-full" : "rounded-2xl",
+                colorClass
+              )}
+            >
+              {initials}
+            </div>
+          )}
         </div>
 
-        <QuickRepliesManagerModal
-          open={isManagerOpen}
-          onOpenChange={setIsManagerOpen}
-        />
+        {/* Info Column */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+          {/* Line 1: Contact/Group Name + Timestamp or Wait Badge */}
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="font-bold text-xs text-foreground truncate">
+              {displayName}
+            </span>
 
-        {/* Conversation Type Filter: Todas | Leads | Grupos */}
-        <div className="flex bg-muted/40 p-1 rounded-xl gap-1 border border-border/30">
+            <div className="shrink-0 flex items-center gap-1.5">
+              {waitTime ? (
+                <span className="text-[10px] font-semibold text-rose-500 bg-rose-500/10 dark:bg-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                  <Clock className="h-2.5 w-2.5 text-rose-500" />
+                  <span>{waitTime}</span>
+                </span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  {messageTime}
+                </span>
+              )}
+
+              {/* Hover 3-dots actions menu button */}
+              {!isSelectionMode && (
+                <div
+                  className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ConversationActionsMenu
+                    conversation={conv}
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Line 2: WhatsApp Instance / Sender Tag */}
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+            {conv.instance?.name && (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate max-w-[200px]">{conv.instance.name}</span>
+              </>
+            )}
+          </div>
+
+          {/* Line 3: Last Message Preview */}
+          <p className="text-[11.5px] text-muted-foreground/90 truncate leading-snug">
+            {conv.last_message_preview || "Nenhuma mensagem recente"}
+          </p>
+
+          {/* Line 4: Status Badges (Pendente / Aberto) + Unread Counter / Pin Icon */}
+          <div className="flex items-center justify-between pt-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground/80 flex items-center gap-0.5 bg-muted/50 px-1.5 py-0.5 rounded-md font-medium">
+                <Clock className="h-2.5 w-2.5" />
+                <span>Pendente</span>
+              </span>
+
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold text-blue-600 bg-blue-500/10 border border-blue-500/20 uppercase tracking-tight">
+                Aberto
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {conv.is_pinned && (
+                <Pin className="h-3.5 w-3.5 text-primary fill-primary shrink-0" />
+              )}
+
+              {conv.unread_count > 0 && (
+                <span
+                  className={cn(
+                    "min-w-4 h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center shadow-xs",
+                    isGreenBadge ? "bg-emerald-600" : "bg-primary"
+                  )}
+                >
+                  {conv.unread_count}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-full h-full flex flex-col overflow-hidden bg-card/20 border-r border-border/40 select-none">
+      {/* 1. Header Toolbar */}
+      <div className="p-4 pb-3 border-b border-border/30 space-y-3 shrink-0 bg-background/50 backdrop-blur-xs">
+        {/* Brand Row: [Logo] Qualify */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-xs">
+              <MessageSquare className="h-4 w-4 fill-current" />
+            </div>
+            <span className="font-extrabold text-base tracking-tight text-primary">
+              Qualify
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Filter Drawer Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsFilterDrawerOpen(true)}
+              className={cn(
+                "h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                activeCategoryCount > 0 && "text-primary bg-primary/10"
+              )}
+              title="Filtros avançados"
+            >
+              <Filter className="h-4 w-4" />
+            </Button>
+
+            {/* Selection Mode Toggle (Raio / Ações em massa) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (isSelectionMode) handleCancelSelection();
+                else setIsSelectionMode(true);
+              }}
+              className={cn(
+                "h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                isSelectionMode && "text-primary bg-primary/10"
+              )}
+              title="Ação em massa / Disparos"
+            >
+              <Zap className="h-4 w-4" />
+            </Button>
+
+            {/* Options Menu (Settings / Quick Replies) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 z-[10000]">
+                <DropdownMenuItem
+                  onClick={() => setIsManagerOpen(true)}
+                  className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2"
+                >
+                  <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Respostas Rápidas</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Title: Caixa de Entrada */}
+        <h2 className="text-xl font-extrabold tracking-tight text-primary">
+          Caixa de Entrada
+        </h2>
+
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
+          <Input
+            placeholder="Pesquisar ou começar uma nova conversa"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-9.5 pr-3 h-10 text-xs rounded-xl border-border/50 bg-muted/40 hover:bg-muted/60 focus:bg-background transition-colors duration-200"
+          />
+        </div>
+
+        {/* Quick Filter Pills Row: Tudo | Não lidas | Favoritas | Grupos */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+          {/* Tudo */}
           <button
             type="button"
-            onClick={() => setFilters({ ...filters, conversationType: "all" } as any)}
+            onClick={() => handlePillSelect("all")}
             className={cn(
-              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-              currentConvType === "all"
-                ? "bg-background text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+              "px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer shadow-2xs",
+              activePill === "all"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <MessageSquare className="h-3.5 w-3.5" />
-            <span>Todas</span>
+            Tudo
           </button>
+
+          {/* Não lidas */}
           <button
             type="button"
-            onClick={() => setFilters({ ...filters, conversationType: "individual" } as any)}
+            onClick={() => handlePillSelect("unread")}
             className={cn(
-              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-              currentConvType === "individual"
-                ? "bg-background text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 shadow-2xs",
+              activePill === "unread"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <User className="h-3.5 w-3.5" />
-            <span>Leads</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilters({ ...filters, conversationType: "group" } as any)}
-            className={cn(
-              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative",
-              currentConvType === "group"
-                ? "bg-background text-purple-600 shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Users className="h-3.5 w-3.5 text-purple-600" />
-            <span>Grupos</span>
-            {totalGroupsCount > 0 && (
-              <span className="text-[10px] bg-purple-500/20 text-purple-600 px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
-                {totalGroupsCount}
+            <span>Não lidas</span>
+            {totalUnreadConvsCount > 0 && (
+              <span
+                className={cn(
+                  "text-[10px] px-1.5 py-0 rounded-full font-extrabold",
+                  activePill === "unread"
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-purple-500/20 text-purple-600"
+                )}
+              >
+                {totalUnreadConvsCount}
               </span>
             )}
           </button>
-        </div>
 
-        {/* Quick Folder Filter Pills for Groups */}
-        {currentConvType === "group" && groupFolders.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
-            <button
-              type="button"
-              onClick={() => setFilters({ ...filters, groupFolderId: null } as any)}
-              className={cn(
-                "px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shrink-0 cursor-pointer border",
-                !(filters as AdvancedChatFilters).groupFolderId
-                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                  : "bg-background/80 hover:bg-muted text-muted-foreground border-border/40"
-              )}
-            >
-              <Folder className="h-3 w-3" />
-              <span>Todas as pastas</span>
-            </button>
-            {groupFolders.map((f) => {
-              const isSelected = (filters as AdvancedChatFilters).groupFolderId === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() =>
-                    setFilters({
-                      ...filters,
-                      groupFolderId: isSelected ? null : f.id,
-                    } as any)
-                  }
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border",
-                    isSelected
-                      ? "bg-purple-600 text-white border-purple-600 font-semibold shadow-xs"
-                      : "bg-background/80 hover:bg-muted text-muted-foreground border-border/40"
-                  )}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: f.color || "#a855f7" }}
-                  />
-                  <span>{f.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        
-        {/* View Tabs: Inbox vs Archived (Only rendered if there are archived conversations or currently viewing archived) */}
-        {(archivedCount > 0 || (filters as AdvancedChatFilters).archiveMode === "archived_only") && (
-          <div className="flex bg-muted/40 p-1 rounded-xl gap-1 border border-border/30">
-            <button
-              type="button"
-              onClick={() => setFilters({ ...filters, archiveMode: "active_only" } as any)}
-              className={cn(
-                "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                (filters as AdvancedChatFilters).archiveMode !== "archived_only"
-                  ? "bg-background text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Inbox className="h-3.5 w-3.5" />
-              <span>Entrada</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilters({ ...filters, archiveMode: "archived_only" } as any)}
-              className={cn(
-                "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative",
-                (filters as AdvancedChatFilters).archiveMode === "archived_only"
-                  ? "bg-background text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Archive className="h-3.5 w-3.5" />
-              <span>Arquivadas</span>
-              {archivedCount > 0 && (
-                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
-                  {archivedCount}
-                </span>
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* Search & Unified Filter Button */}
-        <div className="flex gap-2 items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome ou número..."
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              className="pl-9 h-9 text-xs rounded-xl border-primary/5 bg-background/50 hover:bg-background/80 focus:bg-background transition-colors duration-200"
-            />
-          </div>
-
-          <Button
-            variant={activeCategoryCount > 0 ? "default" : "outline"}
-            size="sm"
-            onClick={() => setIsFilterDrawerOpen(true)}
+          {/* Favoritas */}
+          <button
+            type="button"
+            onClick={() => handlePillSelect("favorites")}
             className={cn(
-              "h-9 px-3 text-xs font-bold rounded-xl gap-1.5 shrink-0 transition-all cursor-pointer",
-              activeCategoryCount > 0
-                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                : "border-border/50 text-muted-foreground hover:text-foreground"
+              "px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer shadow-2xs flex items-center gap-1",
+              activePill === "favorites"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <Filter className="h-3.5 w-3.5" />
-            <span>Filtros</span>
-            {activeCategoryCount > 0 && (
-              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-bold rounded-full bg-background/30 text-current ml-0.5">
-                {activeCategoryCount}
-              </Badge>
+            <Star className={cn("h-3 w-3", activePill === "favorites" && "fill-current")} />
+            <span>Favoritas</span>
+          </button>
+
+          {/* Grupos */}
+          <DropdownMenu>
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => handlePillSelect("groups")}
+                className={cn(
+                  "px-3 py-1.5 rounded-l-full text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 shadow-2xs",
+                  activePill === "groups"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+              >
+                <span>Grupos</span>
+                {totalGroupsCount > 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] px-1.5 py-0 rounded-full font-extrabold",
+                      activePill === "groups"
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-purple-500/20 text-purple-600"
+                    )}
+                  >
+                    {totalGroupsCount}
+                  </span>
+                )}
+              </button>
+
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "px-1.5 py-1.5 rounded-r-full text-xs transition-all shrink-0 cursor-pointer border-l border-border/20 shadow-2xs",
+                    activePill === "groups"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                  title="Filtrar por pasta de grupos"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+            </div>
+
+            {groupFolders.length > 0 && (
+              <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 z-[10000]">
+                <DropdownMenuItem
+                  onClick={() => {
+                    handlePillSelect("groups");
+                    setFilters({ ...(filters as AdvancedChatFilters), groupFolderId: null });
+                  }}
+                  className="text-xs font-semibold py-1.5 rounded-lg cursor-pointer"
+                >
+                  Todas as pastas
+                </DropdownMenuItem>
+                {groupFolders.map((f) => (
+                  <DropdownMenuItem
+                    key={f.id}
+                    onClick={() => {
+                      setActivePill("groups");
+                      setFilters({
+                        ...(filters as AdvancedChatFilters),
+                        conversationType: "group",
+                        groupFolderId: f.id,
+                      });
+                    }}
+                    className="text-xs font-semibold py-1.5 rounded-lg cursor-pointer flex items-center gap-2"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: f.color || "#a855f7" }}
+                    />
+                    <span className="truncate">{f.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
             )}
-          </Button>
+          </DropdownMenu>
         </div>
+
+        {/* Banner Arquivadas */}
+        <div
+          onClick={() => {
+            const nextMode = isArchivedActive ? "active_only" : "archived_only";
+            setFilters({ ...(filters as AdvancedChatFilters), archiveMode: nextMode });
+          }}
+          className={cn(
+            "p-2.5 rounded-xl border border-border/40 flex items-center justify-between cursor-pointer transition-colors text-xs font-medium shadow-2xs",
+            isArchivedActive
+              ? "bg-primary/10 text-primary border-primary/30"
+              : "bg-muted/30 hover:bg-muted/60 text-foreground"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Archive className="h-4 w-4 text-muted-foreground" />
+            <span className="font-semibold">
+              {isArchivedActive ? "Exibindo Arquivadas" : "Arquivadas"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-muted-foreground text-xs font-semibold">
+            <span>{archivedCount}</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </div>
+        </div>
+
+        {/* Bulk Selection Bar */}
+        {isSelectionMode && (
+          <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20 flex items-center justify-between gap-2 shrink-0 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs font-bold text-primary whitespace-nowrap">
+                {selectedConvIds.size} selecionada{selectedConvIds.size !== 1 ? "s" : ""}
+              </span>
+              <span className="text-muted-foreground/40">•</span>
+              <button
+                type="button"
+                onClick={handleToggleSelectAll}
+                className="text-[11px] text-muted-foreground hover:text-primary underline cursor-pointer truncate"
+              >
+                {selectedConvIds.size === sortedConversations.length ? "Desmarcar todas" : "Selecionar todas"}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleCancelSelection}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                disabled={selectedConvIds.size === 0}
+                onClick={() => setIsBatchDialogOpen(true)}
+                className="h-7 px-3 text-xs font-bold gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Zap className="h-3.5 w-3.5 fill-current" />
+                <span>Disparar Fluxo</span>
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Active Filter Chips */}
         <ActiveFilterChips
@@ -400,330 +805,112 @@ export default function InboxList({
           instances={instances}
           groupFolders={groupFolders}
         />
-
-        {/* Drawer Component */}
-        <ChatFilterDrawer
-          open={isFilterDrawerOpen}
-          onOpenChange={setIsFilterDrawerOpen}
-          appliedFilters={filters as AdvancedChatFilters}
-          onApplyFilters={(next) => setFilters(next)}
-          operators={operators}
-          instances={instances}
-        />
-
-        {/* Sort By Toggle & Discreet Selection Toggle */}
-        <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold pt-1 uppercase tracking-wider">
-          <div className="flex items-center gap-1.5">
-            <span>{sortedConversations.length} Contatos</span>
-            <button
-              type="button"
-              onClick={() => {
-                if (isSelectionMode) {
-                  handleCancelSelection();
-                } else {
-                  setIsSelectionMode(true);
-                }
-              }}
-              className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] font-medium tracking-normal transition-colors flex items-center gap-1 cursor-pointer",
-                isSelectionMode
-                  ? "bg-primary text-primary-foreground font-bold shadow-xs"
-                  : "hover:bg-muted text-muted-foreground/80 hover:text-foreground"
-              )}
-              title={isSelectionMode ? "Cancelar seleção em massa" : "Selecionar conversas para ação em massa"}
-            >
-              <CheckSquare className="h-3 w-3" />
-              <span>{isSelectionMode ? "Concluir" : "Selecionar"}</span>
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSortBy("recent")}
-              className={cn(
-                "hover:text-primary transition-colors cursor-pointer",
-                sortBy === "recent" && "text-primary font-bold"
-              )}
-            >
-              Recentes
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setSortBy("waiting")}
-              className={cn(
-                "hover:text-primary transition-colors cursor-pointer",
-                sortBy === "waiting" && "text-primary font-bold"
-              )}
-            >
-              Espera
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* Bulk Action Bar (Active during Selection Mode) */}
-      {isSelectionMode && (
-        <div className="px-3.5 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2 shrink-0 animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xs font-bold text-primary whitespace-nowrap">
-              {selectedConvIds.size} selecionada{selectedConvIds.size !== 1 ? "s" : ""}
-            </span>
-            <span className="text-muted-foreground/40">•</span>
-            <button
-              type="button"
-              onClick={handleToggleSelectAll}
-              className="text-[11px] text-muted-foreground hover:text-primary underline cursor-pointer truncate"
-            >
-              {selectedConvIds.size === sortedConversations.length ? "Desmarcar todas" : "Selecionar todas"}
-            </button>
-          </div>
+      {/* Filter Drawer */}
+      <ChatFilterDrawer
+        open={isFilterDrawerOpen}
+        onOpenChange={setIsFilterDrawerOpen}
+        appliedFilters={filters as AdvancedChatFilters}
+        onApplyFilters={(next) => setFilters(next)}
+        operators={operators}
+        instances={instances}
+      />
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleCancelSelection}
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              disabled={selectedConvIds.size === 0}
-              onClick={() => setIsBatchDialogOpen(true)}
-              className="h-7 px-3 text-xs font-bold gap-1.5 shadow-sm shadow-primary/25 cursor-pointer"
-            >
-              <Zap className="h-3.5 w-3.5 fill-current" />
-              <span>Disparar Fluxo</span>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Conversations List */}
+      {/* 2. Conversations List Scroll Area */}
       <div className="flex-1 overflow-y-auto divide-y divide-border/20">
-        {/* Card Especial Fixo: Copiloto IA (Instagram & Criafy) */}
-        {!isSelectionMode && (
-          <div
-            onClick={() => onSelect("copilot-ia")}
-            className={cn(
-              "p-3 mx-2 my-2 rounded-xl cursor-pointer select-none transition-all duration-200 border flex items-center gap-3 relative group",
-              selectedId === "copilot-ia"
-                ? "bg-purple-500/15 border-purple-500/40 shadow-xs ring-1 ring-purple-500/30"
-                : "bg-gradient-to-r from-purple-500/5 via-indigo-500/5 to-transparent hover:bg-purple-500/10 border-purple-500/25"
-            )}
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5" />
+        {/* Section 1: Fixadas (Pinned) */}
+        {!isArchivedActive && (
+          <div className="pb-1">
+            <div className="px-4 pt-3 pb-1.5 flex items-center gap-1.5 text-xs font-bold text-primary">
+              <Pin className="h-3.5 w-3.5 fill-current" />
+              <span>Fixadas ({1 + pinnedConversations.length})</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-bold text-xs text-foreground truncate">
-                    Copiloto IA
-                  </span>
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[9px] px-1 py-0 h-3.5 font-medium shrink-0">
-                    IA
-                  </Badge>
+
+            {/* Special Pinned Card: Copiloto IA */}
+            {!isSelectionMode && (
+              <div
+                onClick={() => onSelect("copilot-ia")}
+                className={cn(
+                  "mx-3 my-1.5 p-3 rounded-2xl cursor-pointer select-none transition-all duration-150 border flex items-center gap-3 relative group shadow-2xs",
+                  selectedId === "copilot-ia"
+                    ? "bg-purple-500/15 border-purple-500/40 shadow-xs ring-1 ring-purple-500/30"
+                    : "bg-purple-500/5 hover:bg-purple-500/10 border-purple-500/20"
+                )}
+              >
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] text-primary font-medium shrink-0">
-                  Online
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                Assistente de Estratégia e Conteúdo
-              </p>
-            </div>
-          </div>
-        )}
-
-        {sortedConversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-muted-foreground/60 space-y-2">
-            <MessageSquare className="h-10 w-10 opacity-30 animate-pulse text-primary" />
-            <p className="text-xs font-medium">Nenhuma conversa encontrada</p>
-          </div>
-        ) : (
-          <>
-            {sortedConversations.map((conv) => {
-              const isSelected = !isSelectionMode && (conv.id === selectedId || (conv.allLeadConversations && conv.allLeadConversations.some((c: any) => c.id === selectedId)));
-              const isChecked = selectedConvIds.has(conv.id);
-              const waitTime = getWaitTime(conv.waiting_since);
-              const isUnassigned = !conv.operator_id;
-
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => {
-                    if (isSelectionMode) {
-                      toggleSelectConversation(conv.id);
-                    } else {
-                      onSelect(conv.id);
-                    }
-                  }}
-                  className={cn(
-                    "p-3.5 flex items-start gap-2.5 cursor-pointer select-none transition-all duration-200 hover:bg-primary/5 group relative",
-                    isSelected ? "bg-primary/10 border-l-[3px] border-primary" : "bg-transparent",
-                    isSelectionMode && isChecked ? "bg-primary/10 border-l-[3px] border-primary font-medium" : "",
-                    conv.unread_count > 0 && "bg-primary/[0.02] font-semibold"
-                  )}
-                >
-                  {/* Selection Checkbox (Visible in selection mode) */}
-                  {isSelectionMode && (
-                    <div
-                      className="pt-0.5 shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelectConversation(conv.id);
-                      }}
-                    >
-                      <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={() => toggleSelectConversation(conv.id)}
-                        className="data-[state=checked]:bg-primary h-4 w-4 rounded-sm border-border/80"
-                      />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-bold text-xs text-foreground truncate">
+                        Copiloto IA
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="bg-primary/10 text-primary border-primary/20 text-[9px] px-1 py-0 h-3.5 font-semibold shrink-0"
+                      >
+                        IA
+                      </Badge>
                     </div>
-                  )}
-
-                  <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                    {/* Line 1: Lead Name / Title & Wait Time & Pin & Actions Menu */}
-                    <div className="flex justify-between items-center gap-1">
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        {conv.is_pinned && (
-                          <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
-                        )}
-                        {(() => {
-                          const p = conv.lead?.phone || conv.contact_phone || "";
-                          const c = (conv.lead?.custom_fields as Record<string, any>) || {};
-                          const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
-                          return (
-                            <>
-                              {isGrp && (
-                                <div className="p-0.5 rounded bg-purple-500/10 text-purple-600 shrink-0" title="Grupo WhatsApp">
-                                  <Users className="h-3 w-3" />
-                                </div>
-                              )}
-                              <span className="font-semibold text-sm truncate text-card-foreground">
-                                {conv.lead?.name?.trim() || (conv.contact_name && conv.contact_name !== "Grupo" ? conv.contact_name.trim() : null) || (isGrp ? "Grupo WhatsApp" : conv.lead?.phone || conv.contact_phone || "Contato Sem Nome")}
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Wait Time Indicator */}
-                        {waitTime && (
-                          <span className="text-[10px] flex items-center gap-1 font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full animate-pulse">
-                            <Clock className="h-2.5 w-2.5" />
-                            {waitTime}
-                          </span>
-                        )}
-
-                        {/* Conversation Actions Menu */}
-                        {!isSelectionMode && (
-                          <ConversationActionsMenu
-                            conversation={conv}
-                            className="h-6 w-6 opacity-80 group-hover:opacity-100 transition-opacity"
-                          />
-                        )}
-                      </div>
+                    <span className="text-[10px] text-primary font-medium shrink-0">
+                      Online
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                    Assistente de Estratégia e Conteúdo
+                  </p>
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground/80 flex items-center gap-0.5 bg-muted/60 px-1.5 py-0.2 rounded-md font-medium">
+                        <Clock className="h-2.5 w-2.5" />
+                        <span>Pendente</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-md font-semibold text-blue-600 bg-blue-500/10 border border-blue-500/20 uppercase tracking-tight">
+                        Aberto
+                      </span>
                     </div>
-
-                    {/* Instance Tag under name + (i) multi-connection indicator */}
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {conv.instance?.name ? (
-                        <span 
-                          className="text-[10px] font-medium text-muted-foreground/80 flex items-center gap-1 bg-muted/40 px-1.5 py-0.2 rounded border border-border/30 max-w-[200px] truncate"
-                          title={`Conexão: ${conv.instance.name}`}
-                        >
-                          <span className={cn(
-                            "h-1.5 w-1.5 rounded-full shrink-0",
-                            conv.instance.status === "connected" ? "bg-emerald-500" : "bg-muted-foreground/50"
-                          )} />
-                          <span className="truncate">{conv.instance.name}</span>
-                        </span>
-                      ) : (
-                        <span className="text-[9.5px] font-medium text-amber-500/80 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20 max-w-[130px] truncate">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                          <span className="truncate">Sem conexão</span>
-                        </span>
-                      )}
-
-                      {/* (i) info icon badge when lead talks on multiple connections */}
-                      {conv.instanceCount > 1 && (
-                        <span 
-                          className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20 flex items-center gap-1 shrink-0 cursor-help"
-                          title={`Este contato possui histórico em ${conv.instanceCount} conexões diferentes. Exibindo a mais recente.`}
-                        >
-                          <Info className="h-2.5 w-2.5" />
-                          +{conv.instanceCount - 1} conexões
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Line 2: Message Preview */}
-                    <p className="text-xs text-muted-foreground truncate max-w-[280px]">
-                      {conv.last_message_preview || "Nenhuma mensagem"}
-                    </p>
-
-                    {/* Line 3: Meta Attributes (Tags, Operator, Unread, Status Badge) */}
-                    <div className="flex justify-between items-center pt-1">
-                      {/* Badges / Attribution */}
-                      <div className="flex items-center gap-1.5">
-                        {/* Operator assignment */}
-                        {isUnassigned ? (
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 bg-muted/40 px-1 rounded">
-                            <HelpCircle className="h-2.5 w-2.5" />
-                            Pendente
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-primary flex items-center gap-0.5 bg-primary/10 px-1 rounded max-w-[90px] truncate">
-                            <User className="h-2.5 w-2.5 shrink-0" />
-                            {conv.operator?.full_name?.split(" ")[0] || "Operador"}
-                          </span>
-                        )}
-
-                        {/* Status badge */}
-                        <span
-                          className={cn(
-                            "text-[9px] px-1 py-0.2 rounded font-bold uppercase tracking-wider shrink-0",
-                            conv.status === "open" && "bg-blue-500/10 text-blue-500 border border-blue-500/20",
-                            conv.status === "in_progress" && "bg-purple-500/10 text-purple-500 border border-purple-500/20",
-                            conv.status === "waiting" && "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20",
-                            conv.status === "resolved" && "bg-green-500/10 text-green-500 border border-green-500/20"
-                          )}
-                        >
-                          {conv.status === "open" && "Aberto"}
-                          {conv.status === "in_progress" && "Atendimento"}
-                          {conv.status === "waiting" && "Espera"}
-                          {conv.status === "resolved" && "Resolvido"}
-                        </span>
-                      </div>
-
-                      {/* Unread Counter Badge */}
-                      {conv.unread_count > 0 && (
-                        <Badge variant="default" className="h-5 min-w-5 flex items-center justify-center px-1 rounded-full text-[10px] font-bold bg-primary text-primary-foreground shadow-sm shadow-primary/20">
-                          {conv.unread_count}
-                        </Badge>
-                      )}
-                    </div>
+                    <Pin className="h-3.5 w-3.5 text-primary fill-primary" />
                   </div>
                 </div>
-              );
-            })}
-            
-            {/* Loading / End of list indicator */}
-            <div ref={loadMoreRef} className="p-4 flex justify-center">
-              {isFetchingNextPage ? (
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              ) : hasNextPage ? (
-                <div className="h-5" /> // Spacer for observer to trigger before they actually reach the end
-              ) : sortedConversations.length >= 30 ? (
-                <span className="text-xs text-muted-foreground/50">Você chegou ao fim</span>
-              ) : null}
-            </div>
-          </>
+              </div>
+            )}
+
+            {/* Other Pinned Conversations */}
+            {pinnedConversations.map(renderConversationItem)}
+          </div>
         )}
+
+        {/* Section 2: Conversas (Normal) */}
+        <div>
+          <div className="px-4 pt-3 pb-1 flex items-center gap-1.5 text-xs font-bold text-primary">
+            <MessageSquare className="h-3.5 w-3.5 fill-current" />
+            <span>Conversas</span>
+          </div>
+
+          {normalConversations.length === 0 && pinnedConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-muted-foreground/60 space-y-2">
+              <MessageSquare className="h-10 w-10 opacity-30 animate-pulse text-primary" />
+              <p className="text-xs font-medium">Nenhuma conversa encontrada</p>
+            </div>
+          ) : (
+            normalConversations.map(renderConversationItem)
+          )}
+        </div>
+
+        {/* Loading Indicator */}
+        <div ref={loadMoreRef} className="p-4 flex justify-center">
+          {isFetchingNextPage ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : hasNextPage ? (
+            <div className="h-5" />
+          ) : sortedConversations.length >= 30 ? (
+            <span className="text-xs text-muted-foreground/50">Você chegou ao fim</span>
+          ) : null}
+        </div>
       </div>
+
       {/* Batch Workflow Dispatch Dialog */}
       <BatchWorkflowDispatchDialog
         open={isBatchDialogOpen}
@@ -733,6 +920,11 @@ export default function InboxList({
         onComplete={() => {
           handleCancelSelection();
         }}
+      />
+
+      <QuickRepliesManagerModal
+        open={isManagerOpen}
+        onOpenChange={setIsManagerOpen}
       />
     </div>
   );

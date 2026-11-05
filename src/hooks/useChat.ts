@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { getLocalPins, getLocalArchived } from "@/hooks/useConversationActions";
+import { getLocalPins, getLocalArchived, getLocalFavorites } from "@/hooks/useConversationActions";
 
 export interface ChatConversation {
   id: string;
@@ -22,6 +22,7 @@ export interface ChatConversation {
   tags: string[];
   is_archived?: boolean;
   is_muted?: boolean;
+  is_favorite?: boolean;
   archived_at?: string | null;
   archived_by?: string | null;
   is_pinned?: boolean;
@@ -444,6 +445,16 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     enabled: !!activeCompanyId && !!user,
   });
 
+  // Fetch User Favorites (from local storage)
+  const { data: userFavorites = [] } = useQuery({
+    queryKey: ["chat-favorites", activeCompanyId, user?.id],
+    queryFn: async () => {
+      if (!activeCompanyId || !user) return [];
+      return getLocalFavorites(activeCompanyId, user.id);
+    },
+    enabled: !!activeCompanyId && !!user,
+  });
+
   const { data: mutedConversationIds = [] } = useQuery({
     queryKey: ["chat-muted-conversations", activeCompanyId, user?.id],
     queryFn: async () => {
@@ -572,6 +583,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
 
   const rawConversations = useMemo(() => conversationsData?.pages.flat() || [], [conversationsData]);
   const pinnedSet = useMemo(() => new Set(userPins), [userPins]);
+  const favoritesSet = useMemo(() => new Set(userFavorites), [userFavorites]);
   const mutedSet = useMemo(() => new Set(mutedConversationIds), [mutedConversationIds]);
 
   const conversations = useMemo(() => {
@@ -582,6 +594,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       is_archived: c.is_archived || localArchivedSet.has(c.id),
       is_muted: mutedSet.has(c.id),
       is_pinned: pinnedSet.has(c.id),
+      is_favorite: favoritesSet.has(c.id),
     }));
 
     const archiveMode = (filters as AdvancedChatFilters)?.archiveMode || "active_only";
@@ -627,6 +640,10 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         if (convType === "individual" && isGrp) return false;
       }
 
+      if ((filters as AdvancedChatFilters)?.favoritesOnly && !c.is_favorite) {
+        return false;
+      }
+
       return true;
     });
 
@@ -652,7 +669,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       if (!a.is_pinned && b.is_pinned) return 1;
       return 0;
     });
-  }, [rawConversations, pinnedSet, mutedSet, activeCompanyId, filters, allowedCrmGroupJids, folderGroupJidsMap]);
+  }, [rawConversations, pinnedSet, favoritesSet, mutedSet, activeCompanyId, filters, allowedCrmGroupJids, folderGroupJidsMap]);
 
   // Auto-sync CRM groups into chat_conversations
   useQuery({
