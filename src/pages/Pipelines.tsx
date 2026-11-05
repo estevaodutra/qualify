@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
@@ -25,7 +25,13 @@ export default function Pipelines() {
   const { activeCompany } = useCompany();
   const queryClient = useQueryClient();
   
-  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
+  const [activePipelineId, setActivePipelineId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get("pipelineId");
+    }
+    return null;
+  });
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [search, setSearch] = useState("");
@@ -117,36 +123,55 @@ export default function Pipelines() {
     return active[0]?.id || null;
   };
 
-  // Always reset to the primary (first) pipeline on page load / reload
-  const hasInitializedRef = useRef(false);
-
+  // Restore last pipeline from URL or localStorage when entering or switching companies
   useEffect(() => {
-    hasInitializedRef.current = false;
-    if (activeCompany?.id) {
-      localStorage.removeItem(`qualify-active-pipeline:${activeCompany.id}`);
+    if (!activeCompany?.id) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlPipelineId = urlParams.get("pipelineId");
+    const stored = localStorage.getItem(`qualify-active-pipeline:${activeCompany.id}`);
+
+    if (urlPipelineId) {
+      setActivePipelineId(urlPipelineId);
+    } else if (stored) {
+      setActivePipelineId(stored);
     }
   }, [activeCompany?.id]);
 
+  // Persist current active pipeline in localStorage and sync with URL
   useEffect(() => {
-    if (pipelines && pipelines.length > 0 && groups !== undefined && !hasInitializedRef.current) {
-      const firstId = getFirstPipelineId(groups, pipelines);
-      if (firstId) {
-        setActivePipelineId(firstId);
-        hasInitializedRef.current = true;
-      }
-    }
-  }, [pipelines, groups]);
+    if (activeCompany?.id && activePipelineId) {
+      localStorage.setItem(`qualify-active-pipeline:${activeCompany.id}`, activePipelineId);
 
-  // If current active pipeline was removed or does not exist, fallback to first pipeline
-  useEffect(() => {
-    if (pipelines && pipelines.length > 0 && activePipelineId) {
-      const exists = pipelines.some(p => p.id === activePipelineId);
-      if (!exists) {
-        const firstId = getFirstPipelineId(groups, pipelines);
-        if (firstId) setActivePipelineId(firstId);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("pipelineId") !== activePipelineId) {
+        url.searchParams.set("pipelineId", activePipelineId);
+        window.history.replaceState({}, "", url.toString());
       }
     }
-  }, [pipelines, groups, activePipelineId]);
+  }, [activePipelineId, activeCompany?.id]);
+
+  // When pipelines/groups load: validate activePipelineId, fallback to localStorage or first pipeline
+  useEffect(() => {
+    if (!pipelines || pipelines.length === 0 || groups === undefined) return;
+
+    // 1. If currently selected pipeline is valid, keep it
+    const currentExists = activePipelineId && pipelines.some(p => p.id === activePipelineId);
+    if (currentExists) return;
+
+    // 2. Otherwise try to restore from localStorage
+    const stored = activeCompany?.id ? localStorage.getItem(`qualify-active-pipeline:${activeCompany.id}`) : null;
+    if (stored && pipelines.some(p => p.id === stored)) {
+      setActivePipelineId(stored);
+      return;
+    }
+
+    // 3. Fallback to first pipeline of the list
+    const firstId = getFirstPipelineId(groups, pipelines);
+    if (firstId) {
+      setActivePipelineId(firstId);
+    }
+  }, [pipelines, groups, activeCompany?.id, activePipelineId]);
 
   // Fetch active pipeline with stages
   const { data: activePipeline } = useQuery({
