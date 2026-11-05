@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useAdminUsers, useToggleSuperadmin, type AdminUser, useAdminCompanies } from "@/hooks/useAdmin";
+import { useAdminUsers, useToggleSuperadmin, type AdminUser, useAdminCompanies, useGenerateUserApi4comToken } from "@/hooks/useAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   XCircle,
   Building2,
   PhoneCall,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,6 +56,7 @@ export default function AdminUsers() {
   const { data: companies = [] } = useAdminCompanies();
   const { isSuperadmin } = useSuperadmin();
   const toggleSuperadmin = useToggleSuperadmin();
+  const generateApi4comToken = useGenerateUserApi4comToken();
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -262,6 +264,20 @@ export default function AdminUsers() {
 
                           <DropdownMenuItem onClick={() => setApi4comUser(u)}>
                             <PhoneCall className="mr-2 h-3.5 w-3.5 text-purple-600" /> Token API4COM / Telefonia
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={() => {
+                              generateApi4comToken.mutate({
+                                user_id: u.id,
+                                email: u.email,
+                                name: u.full_name || undefined,
+                              });
+                            }}
+                            disabled={generateApi4comToken.isPending}
+                          >
+                            <Sparkles className="mr-2 h-3.5 w-3.5 text-purple-600" />
+                            {generateApi4comToken.isPending ? "Gerando na API4COM..." : "⚡ Gerar Token & Ramal API4COM"}
                           </DropdownMenuItem>
 
                           <DropdownMenuItem

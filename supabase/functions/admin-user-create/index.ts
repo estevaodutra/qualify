@@ -145,6 +145,25 @@ Deno.serve(async (req) => {
         },
         { onConflict: "id" }
       );
+
+      // Provisionar usuário nativamente na API4COM de forma automática
+      try {
+        fetch(`${supabaseUrl}/functions/v1/api4com-manage-user`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${supabaseServiceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "generate-token",
+            user_id: targetUserId,
+            email: cleanEmail,
+            name: cleanName || cleanEmail.split("@")[0],
+          }),
+        }).catch((err) => console.warn("[admin-user-create] Erro async API4COM:", err));
+      } catch (api4comErr) {
+        console.warn("[admin-user-create] Falha ao disparar provisionamento API4COM:", api4comErr);
+      }
     }
 
     const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({

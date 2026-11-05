@@ -37,9 +37,13 @@ Deno.serve(async (req) => {
       const envAdminToken = Deno.env.get("API4COM_ADMIN_TOKEN");
       const configVal = (data?.value as Record<string, string>) || {};
 
+      // Master token perpétuo da conta master oficial comercial@d2xnegociosdigitais.com
+      const MASTER_TOKEN_DEFAULT = "043yV21WZWJuYVyWPEsQJ6Rwn31IokCwI5GxZgmhpkya59OR1enk8GEq8ebdrhT4";
+      const MASTER_DOMAIN_DEFAULT = "d2x.api4com.com";
+
       return {
-        admin_token: configVal.admin_token || envAdminToken || "",
-        default_domain: configVal.default_domain || "qualify.api4com.com",
+        admin_token: configVal.admin_token || envAdminToken || MASTER_TOKEN_DEFAULT,
+        default_domain: configVal.default_domain || MASTER_DOMAIN_DEFAULT,
       };
     }
 
@@ -306,15 +310,16 @@ Deno.serve(async (req) => {
               password,
               phone,
               role: "USER",
+              emailVerified: true,
             }),
           });
 
           if (createRes.ok) {
             const createdUser = await createRes.json();
-            api4comUserId = createdUser?.id ? String(createdUser.id) : null;
+            api4comUserId = createdUser?.uuid || (createdUser?.id ? String(createdUser.id) : null);
           } else {
             const errBody = await createRes.text();
-            console.log("[api4com-manage-user] Aviso ao criar usuário via admin token:", errBody);
+            console.log("[api4com-manage-user] Aviso ao criar usuário via admin token (pode já existir):", errBody);
           }
         } catch (e) {
           console.warn("[api4com-manage-user] Erro na tentativa de criação de usuário:", e);
@@ -335,6 +340,60 @@ Deno.serve(async (req) => {
         const loginErr = await loginRes.text();
         let parsedErr: any = null;
         try { parsedErr = JSON.parse(loginErr); } catch (_) {}
+
+        // Se o login falhou porque o usuário já existia com outra senha, tentar buscar dados do usuário via admin token
+        if (adminToken) {
+          try {
+            const findRes = await fetch(
+              `https://api.api4com.com/api/v1/users?filter[where][email]=${encodeURIComponent(email)}`,
+              { headers: { Authorization: adminToken } }
+            );
+            if (findRes.ok) {
+              const usersFound = await findRes.json();
+              if (Array.isArray(usersFound) && usersFound.length > 0) {
+                const existingUser = usersFound[0];
+                const existingExt = existingUser.extension ? String(existingUser.extension) : null;
+                const existingUuid = existingUser.uuid ? String(existingUser.uuid) : null;
+
+                // Salva o ramal existente no profile caso exista
+                if (existingExt) {
+                  await supabase
+                    .from("profiles")
+                    .update({
+                      api4com_extension: existingExt,
+                      api4com_domain: master.default_domain,
+                      api4com_user_id: existingUuid,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", userId);
+
+                  await supabase
+                    .from("call_operators")
+                    .update({
+                      extension: existingExt,
+                      sip_domain: master.default_domain,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("user_id", userId);
+                }
+
+                return new Response(
+                  JSON.stringify({
+                    success: false,
+                    error: `Usuário já existe na API4COM com Ramal ${existingExt || "desconhecido"}. Para habilitar o Webphone com áudio direto, informe o Token de Acesso da API4COM no campo abaixo.`,
+                    requiresManualPasswordOrToken: true,
+                    extension: existingExt,
+                    domain: master.default_domain,
+                    email,
+                  }),
+                  { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
+            }
+          } catch (findErr) {
+            console.warn("[api4com-manage-user] Erro ao buscar usuário existente:", findErr);
+          }
+        }
 
         const friendlyMsg =
           parsedErr?.error?.message === "login failed"

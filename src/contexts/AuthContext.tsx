@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -112,6 +112,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       },
     });
+
+    // Provisionar nativamente na API4COM assim que o usuário cria a conta
+    if (!error && signUpData?.user?.id) {
+      supabase.functions
+        .invoke("api4com-manage-user", {
+          body: {
+            action: "generate-token",
+            user_id: signUpData.user.id,
+            email,
+            name: fullName,
+            password,
+          },
+        })
+        .then(({ data, error: funcErr }) => {
+          if (funcErr || !data?.success) {
+            console.warn("[AuthContext] Provisionamento API4COM no cadastro:", funcErr || data?.error);
+          } else {
+            console.log("[AuthContext] Usuário e Ramal API4COM provisionados com sucesso:", data.extension);
+          }
+        })
+        .catch((err) => {
+          console.warn("[AuthContext] Falha ao comunicar com api4com-manage-user:", err);
+        });
+    }
+
     return { error: error as Error | null };
   };
 
