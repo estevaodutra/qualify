@@ -1378,7 +1378,7 @@ export function CallActionDialog({
 
   // Trigger autoDial on mount if requested
   useEffect(() => {
-    if (open && autoDial && currentData.callId && !autoDialTriggeredRef.current) {
+    if (open && autoDial && (currentData.callId || currentData.leadPhone) && !autoDialTriggeredRef.current) {
       try {
         if (typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true") {
           return;
@@ -1391,7 +1391,7 @@ export function CallActionDialog({
         handleManualDial();
       }
     }
-  }, [open, autoDial, currentData.callStatus, currentData.callId]);
+  }, [open, autoDial, currentData.callStatus, currentData.callId, currentData.leadPhone]);
 
   const resetState = () => {
     setSelectedActionId(null);

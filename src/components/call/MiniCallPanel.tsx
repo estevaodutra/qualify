@@ -6,11 +6,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCallFloatingStore, CallDialogData } from "@/stores/callFloating.store";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { formatPhone, cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   PhoneCall,
+  Grid3X3,
+  Delete,
+  Eraser,
   Phone,
   MessageSquare,
   Search,
@@ -80,11 +84,29 @@ interface HistoryItem {
   durationSeconds: number;
 }
 
+
+const KEYPAD_BUTTONS = [
+  { digit: "1", sub: "" },
+  { digit: "2", sub: "ABC" },
+  { digit: "3", sub: "DEF" },
+  { digit: "4", sub: "GHI" },
+  { digit: "5", sub: "JKL" },
+  { digit: "6", sub: "MNO" },
+  { digit: "7", sub: "PQRS" },
+  { digit: "8", sub: "TUV" },
+  { digit: "9", sub: "WXYZ" },
+  { digit: "*", sub: "" },
+  { digit: "0", sub: "+" },
+  { digit: "#", sub: "" },
+];
+
 export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: MiniCallPanelProps) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"queue" | "in_progress" | "history">("queue");
+  const [activeTab, setActiveTab] = useState<"dialer" | "queue" | "in_progress" | "history">("dialer");
+  const [dialerNumber, setDialerNumber] = useState("");
+  const [dialerLeadName, setDialerLeadName] = useState("");
   const [search, setSearch] = useState("");
 
   const { activeCall, callStatus, duration, openCall, setView } = useCallFloatingStore();
@@ -529,6 +551,41 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
     });
   };
 
+  
+  const handleKeypadPress = (digit: string) => {
+    setDialerNumber((prev) => prev + digit);
+  };
+
+  const handleKeypadBackspace = () => {
+    setDialerNumber((prev) => prev.slice(0, -1));
+  };
+
+  const handleKeypadClear = () => {
+    setDialerNumber("");
+    setDialerLeadName("");
+  };
+
+  const handleDialNumber = () => {
+    const clean = dialerNumber.replace(/\D/g, "");
+    if (!clean || clean.length < 8) {
+      toast.error("Digite um número com DDD para discar (mínimo 8 dígitos).");
+      return;
+    }
+
+    const targetName = dialerLeadName.trim() || `Discagem (${formatPhone(clean)})`;
+
+    openCall({
+      callId: `manual_${Date.now()}`,
+      leadName: targetName,
+      leadPhone: clean,
+      campaignName: "Discagem Direta",
+      duration: 0,
+      callStatus: "dialing",
+      userId: user?.id,
+      autoDial: true,
+    });
+  };
+
   const formatSecs = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -644,12 +701,26 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
 
       {/* 3. Segmented Navigation Tabs */}
       <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 shrink-0">
-        <div className="grid grid-cols-3 gap-1 bg-slate-200/60 dark:bg-slate-800/80 p-1 rounded-lg text-xs font-semibold">
+        <div className="grid grid-cols-4 gap-1 bg-slate-200/60 dark:bg-slate-800/80 p-1 rounded-lg text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setActiveTab("dialer")}
+            className={cn(
+              "py-1 px-1.5 rounded-md transition-all text-center flex items-center justify-center gap-1 truncate",
+              activeTab === "dialer"
+                ? "bg-white dark:bg-slate-900 text-primary shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Grid3X3 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Teclado</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab("queue")}
             className={cn(
-              "py-1 px-2 rounded-md transition-all text-center flex items-center justify-center gap-1 truncate",
+              "py-1 px-1.5 rounded-md transition-all text-center flex items-center justify-center gap-1 truncate",
               activeTab === "queue"
                 ? "bg-white dark:bg-slate-900 text-primary shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
@@ -691,6 +762,83 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
 
       {/* 4. Tab Content (Scrollable List) */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5">
+        
+        {/* ── DIALER (TECLADO) TAB ── */}
+        {activeTab === "dialer" && (
+          <div className="flex flex-col items-center justify-between h-full py-1 px-1 space-y-3">
+            {/* Display Input */}
+            <div className="w-full space-y-2">
+              <div className="relative flex items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-2xs focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+                <Phone className="h-4 w-4 text-slate-400 shrink-0 mr-2" />
+                <input
+                  type="tel"
+                  value={dialerNumber}
+                  onChange={(e) => setDialerNumber(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleDialNumber();
+                  }}
+                  placeholder="DDD + Telefone..."
+                  className="w-full bg-transparent text-lg font-mono font-bold tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:font-normal placeholder:text-xs focus:outline-none"
+                  autoFocus
+                />
+                {dialerNumber && (
+                  <button
+                    type="button"
+                    onClick={handleKeypadBackspace}
+                    className="p-1 text-slate-400 hover:text-destructive transition-colors shrink-0 ml-1 rounded-md"
+                    title="Apagar dígito"
+                  >
+                    <Delete className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <Input
+                value={dialerLeadName}
+                onChange={(e) => setDialerLeadName(e.target.value)}
+                placeholder="Nome do lead / identificação (opcional)"
+                className="h-7 text-xs bg-slate-50/50 dark:bg-slate-900/50 border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-200"
+              />
+            </div>
+
+            {/* Numeric Keypad 3x4 */}
+            <div className="grid grid-cols-3 gap-2 w-full max-w-[280px] my-auto">
+              {KEYPAD_BUTTONS.map((btn) => (
+                <button
+                  key={btn.digit}
+                  type="button"
+                  onClick={() => handleKeypadPress(btn.digit)}
+                  className="h-12 rounded-xl bg-slate-100/70 hover:bg-slate-200/70 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-800 active:scale-95 transition-all flex flex-col items-center justify-center shadow-2xs group cursor-pointer"
+                >
+                  <span className="text-lg font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary leading-none">
+                    {btn.digit}
+                  </span>
+                  {btn.sub && (
+                    <span className="text-[8px] font-semibold text-slate-400 group-hover:text-primary/70 tracking-widest mt-0.5 uppercase">
+                      {btn.sub}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Big Dial Button */}
+            <div className="w-full pt-1">
+              <Button
+                type="button"
+                onClick={handleDialNumber}
+                disabled={!dialerNumber.trim()}
+                className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md gap-2"
+              >
+                <PhoneCall className="h-4 w-4" />
+                <span>
+                  {dialerNumber.trim() ? `Ligar para ${formatPhone(dialerNumber)}` : "Digite um número para discar"}
+                </span>
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── QUEUE TAB ── */}
         {activeTab === "queue" && (
           <>
@@ -708,6 +856,13 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
                 <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
                   {search ? "Nenhum resultado para a busca realizada." : "Não há chamadas pendentes ou aguardando atendimento no momento."}
                 </p>
+                <Button
+                  onClick={() => setActiveTab("dialer")}
+                  className="mt-4 h-8 px-3 text-xs font-semibold gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-xs"
+                >
+                  <Grid3X3 className="h-3.5 w-3.5" />
+                  <span>Digitar Número no Teclado</span>
+                </Button>
               </div>
             ) : (
               filteredQueue.map((item, idx) => {
@@ -1016,26 +1171,58 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
 
       {/* 5. Footer Quick Bar */}
       <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-800 px-4 py-2.5 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md flex items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-1.5 text-muted-foreground truncate">
-          <Clock className="h-3.5 w-3.5 text-slate-400" />
-          <span>Fila atualizada automaticamente</span>
-        </div>
+        {activeTab === "dialer" ? (
+          <div className="flex items-center justify-between w-full gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleKeypadClear}
+              disabled={!dialerNumber}
+              className="h-8 px-2.5 text-xs text-muted-foreground hover:text-destructive gap-1"
+            >
+              <Eraser className="h-3.5 w-3.5" />
+              <span>Limpar</span>
+            </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const first = filteredQueue[0];
-            if (first) {
-              handleStartCall(first, true);
-            }
-          }}
-          disabled={filteredQueue.length === 0}
-          className="h-8 px-3 text-xs font-bold rounded-lg bg-gradient-to-r from-[#7C3AED] to-[#3B4DFF] hover:opacity-95 text-white gap-1.5 shadow-2xs disabled:opacity-50"
-        >
-          <Phone className="h-3.5 w-3.5" />
-          <span>Discar Próximo</span>
-        </Button>
+            <Button
+              size="sm"
+              onClick={handleDialNumber}
+              disabled={!dialerNumber.trim()}
+              className="h-8 px-4 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-2xs disabled:opacity-50"
+            >
+              <PhoneCall className="h-3.5 w-3.5" />
+              <span>Ligar Agora</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between w-full gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab("dialer")}
+              className="h-8 px-2.5 text-xs font-semibold gap-1 text-primary border-primary/30 hover:bg-primary/5"
+            >
+              <Grid3X3 className="h-3.5 w-3.5" />
+              <span>Teclado</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const first = filteredQueue[0];
+                if (first) {
+                  handleStartCall(first, true);
+                }
+              }}
+              disabled={filteredQueue.length === 0}
+              className="h-8 px-3 text-xs font-bold rounded-lg bg-gradient-to-r from-[#7C3AED] to-[#3B4DFF] hover:opacity-95 text-white gap-1.5 shadow-2xs disabled:opacity-50"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              <span>Discar Próximo</span>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

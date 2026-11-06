@@ -1,6 +1,6 @@
 {
-  "commit": "a1c4ba7a6230c30372b29c681820a06bb390a854",
-  "shortCommit": "a1c4ba7",
-  "message": "fix(webphone): atualizar senhas SIP reais, evitar loop infinito e auto-conectar ao discar",
-  "builtAt": "2026-11-06T00:08:04.035Z"
+  "commit": "614072d141fa2d4635ed48c63e99ff46b5fe3900",
+  "shortCommit": "614072d",
+  "message": "fix(call): restaurar balao original de discagem e integrar discagem nativa API4COM no card",
+  "builtAt": "2026-11-06T04:14:27.099Z"
 }
