@@ -18,7 +18,8 @@ import { toast } from "sonner";
 import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { Button } from "@/components/ui/button";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, Route } from "lucide-react";
+import { JourneyNetworkSettings } from "@/components/crm/journey/JourneyNetworkSettings";
 
 export default function Pipelines() {
   const isMobile = useIsMobile();
@@ -44,6 +45,7 @@ export default function Pipelines() {
   const [search, setSearch] = useState("");
   
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
+  const [journeySettingsOpen, setJourneySettingsOpen] = useState(false);
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
   
   const [createStageOpen, setCreateStageOpen] = useState(false);
@@ -466,6 +468,7 @@ export default function Pipelines() {
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         {activePipeline ? (
           <>
+            <div className="flex justify-end px-4 pt-2 bg-background"><Button size="sm" variant="outline" onClick={() => setJourneySettingsOpen(true)}><Route className="h-4 w-4 mr-2" /> Configurar jornadas</Button></div>
             <PipelineHeader 
               pipeline={activePipeline} 
               group={activeGroup || undefined}
@@ -586,6 +589,7 @@ export default function Pipelines() {
         )}
       </div>
 
+      {activeCompany?.id && <JourneyNetworkSettings open={journeySettingsOpen} onOpenChange={setJourneySettingsOpen} companyId={activeCompany.id} />}
       <DealDrawer 
         open={dealDrawerOpen} 
         onOpenChange={setDealDrawerOpen}
