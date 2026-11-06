@@ -4863,7 +4863,9 @@ Deno.serve(async (req) => {
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
                   timeoutNodeId: timeoutNodeId,
-                  waitingType: "user_input"
+                  waitingType: "user_input",
+                  timeoutMs: timeoutMs,
+                  expiresAt: new Date(Date.now() + timeoutMs).toISOString()
                 }
               })
               .eq("id", workflowExecutionId);
@@ -4883,7 +4885,9 @@ Deno.serve(async (req) => {
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
                   timeoutNodeId: timeoutNodeId,
-                  waitingType: "user_input"
+                  waitingType: "user_input",
+                  timeoutMs: timeoutMs,
+                  expiresAt: new Date(Date.now() + timeoutMs).toISOString()
                 },
                 nodes_data: sortedNodes,
                 destinations: activeDestinations,
@@ -5570,7 +5574,9 @@ Deno.serve(async (req) => {
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
                   timeoutNodeId: timeoutNodeId,
-                  waitingType: "user_input"
+                  waitingType: "user_input",
+                  timeoutMs: timeoutMs,
+                  expiresAt: new Date(Date.now() + timeoutMs).toISOString()
                 }
               })
               .eq("id", workflowExecutionId);
@@ -5590,7 +5596,9 @@ Deno.serve(async (req) => {
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
                   timeoutNodeId: timeoutNodeId,
-                  waitingType: "user_input"
+                  waitingType: "user_input",
+                  timeoutMs: timeoutMs,
+                  expiresAt: new Date(Date.now() + timeoutMs).toISOString()
                 },
                 nodes_data: sortedNodes,
                 destinations: activeDestinations,
@@ -6046,7 +6054,9 @@ Deno.serve(async (req) => {
                 waitingNodeId: node.id,
                 resumeNodeId: userInputNextNodeId,
                 timeoutNodeId: userInputTimeoutNodeId,
-                waitingType: "user_input"
+                waitingType: "user_input",
+                timeoutMs: ((node.config as any)?.timeoutMs || 3600000) as number,
+                expiresAt: new Date(Date.now() + (((node.config as any)?.timeoutMs || 3600000) as number)).toISOString()
               }
             })
             .eq("id", workflowExecutionId);
@@ -6066,7 +6076,9 @@ Deno.serve(async (req) => {
                 waitingNodeId: node.id,
                 resumeNodeId: userInputNextNodeId,
                 timeoutNodeId: userInputTimeoutNodeId,
-                waitingType: "user_input"
+                waitingType: "user_input",
+                timeoutMs: ((node.config as any)?.timeoutMs || 3600000) as number,
+                expiresAt: new Date(Date.now() + (((node.config as any)?.timeoutMs || 3600000) as number)).toISOString()
               },
               nodes_data: sortedNodes,
               destinations: nextActiveDestinations.length > 0 ? nextActiveDestinations : activeDestinations,

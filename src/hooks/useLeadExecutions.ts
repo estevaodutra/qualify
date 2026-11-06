@@ -93,6 +93,36 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
       const rawWf: any[] = wfData || [];
       const rawSeq: any[] = seqData || [];
 
+      // Query workflow_user_inputs to detect expired / answered inputs
+      const userInputsMap = new Map<string, any>();
+      try {
+        let uQuery = supabase
+          .from("workflow_user_inputs" as any)
+          .select("id, execution_id, sequence_id, status, expires_at, created_at, updated_at, node_id, phone")
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (leadId) {
+          uQuery = uQuery.eq("lead_id", leadId);
+        } else if (cleanPhone) {
+          uQuery = uQuery.ilike("phone", `%${cleanPhone.slice(-8)}%`);
+        }
+
+        const { data: uData } = await uQuery;
+        if (uData) {
+          for (const input of uData) {
+            if (input.execution_id && !userInputsMap.has(input.execution_id)) {
+              userInputsMap.set(input.execution_id, input);
+            }
+            if (input.sequence_id && !userInputsMap.has(input.sequence_id)) {
+              userInputsMap.set(input.sequence_id, input);
+            }
+          }
+        }
+      } catch (uErr) {
+        console.warn("[useLeadExecutions] user_inputs query error:", uErr);
+      }
+
       // 3. Collect sequence and campaign IDs to resolve workflow names
       const sequenceIds = Array.from(
         new Set([
@@ -164,13 +194,61 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
         const isManuallyPaused = !!triggerCtx.manually_paused;
 
         const isDelay = !!seq.resume_at || triggerCtx.waitingType === "delay";
-        const isUserInput = triggerCtx.waitingType === "user_input";
+        let isUserInput = triggerCtx.waitingType === "user_input";
+
+        // Check if user input has expired / timed out with no response
+        let isExpiredUserInput = false;
+        if (isUserInput) {
+          const input = userInputsMap.get(seq.id) || userInputsMap.get(seq.sequence_id);
+          const nowMs = Date.now();
+          if (input) {
+            if (["timeout", "completed", "cancelled", "skipped"].includes(input.status)) {
+              isExpiredUserInput = true;
+            } else if (input.expires_at && new Date(input.expires_at).getTime() <= nowMs) {
+              isExpiredUserInput = true;
+            }
+          }
+
+          if (!isExpiredUserInput) {
+            const expiresAtMs = triggerCtx.expiresAt ? new Date(triggerCtx.expiresAt).getTime() : 0;
+            const timeoutMs = typeof triggerCtx.timeoutMs === "number" ? triggerCtx.timeoutMs : 3600000;
+            const startedOrUpdatedMs = new Date(seq.updated_at || seq.created_at).getTime();
+
+            if (expiresAtMs > 0 && expiresAtMs <= nowMs) {
+              isExpiredUserInput = true;
+            } else if (nowMs - startedOrUpdatedMs > Math.max(timeoutMs, 60000)) {
+              isExpiredUserInput = true;
+            }
+          }
+        }
 
         let waitingType: "delay" | "user_input" | "poll" | "ura" | "call" | null = null;
         let delayFormatted: string | null = triggerCtx.delayFormatted || null;
         let stepName = "Aguardando próxima etapa";
 
-        if (isUserInput) {
+        if (isExpiredUserInput) {
+          waitingType = null;
+          stepName = "Finalizado (sem resposta)";
+          isUserInput = false;
+
+          // Auto-heal database record in background so it doesn't stay paused in sequence_executions
+          if (seq.status === "paused" || seq.status === "running") {
+            const nowIso = new Date().toISOString();
+            supabase
+              .from("sequence_executions")
+              .update({ status: "completed", updated_at: nowIso })
+              .eq("id", seq.id)
+              .then(() => {})
+              .catch((err) => console.warn("[useLeadExecutions] Auto-heal seq error:", err));
+
+            supabase
+              .from("workflow_executions")
+              .update({ status: "success", finished_at: nowIso, updated_at: nowIso })
+              .eq("id", seq.id)
+              .then(() => {})
+              .catch((err) => console.warn("[useLeadExecutions] Auto-heal wf error:", err));
+          }
+        } else if (isUserInput) {
           waitingType = "user_input";
           stepName = "Aguardando resposta do usuário";
         } else if (isDelay) {
@@ -206,7 +284,9 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
         }
 
         let mappedStatus: ExecutionDisplayStatus = "running";
-        if (seq.status === "paused") {
+        if (isExpiredUserInput) {
+          mappedStatus = "completed";
+        } else if (seq.status === "paused") {
           if (isManuallyPaused) {
             mappedStatus = "paused";
           } else if (isDelay) {
@@ -266,13 +346,44 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
         const triggerPayload = (wf.trigger_payload || {}) as Record<string, any>;
         const isManuallyPaused = !!triggerPayload.manually_paused;
         const isWfDelay = !!triggerPayload.resumeAt || triggerPayload.waitingType === "delay";
-        const isWfUserInput = triggerPayload.waitingType === "user_input";
+        let isWfUserInput = triggerPayload.waitingType === "user_input";
+
+        let isWfExpiredUserInput = false;
+        if (isWfUserInput) {
+          const input = userInputsMap.get(wf.id) || userInputsMap.get(wf.sequence_id);
+          const nowMs = Date.now();
+          if (input) {
+            if (["timeout", "completed", "cancelled", "skipped"].includes(input.status)) {
+              isWfExpiredUserInput = true;
+            } else if (input.expires_at && new Date(input.expires_at).getTime() <= nowMs) {
+              isWfExpiredUserInput = true;
+            }
+          }
+
+          if (!isWfExpiredUserInput) {
+            const expiresAtMs = triggerPayload.expiresAt ? new Date(triggerPayload.expiresAt).getTime() : 0;
+            const timeoutMs = typeof triggerPayload.timeoutMs === "number" ? triggerPayload.timeoutMs : 3600000;
+            const startedOrUpdatedMs = new Date(wf.started_at || wf.created_at).getTime();
+
+            if (expiresAtMs > 0 && expiresAtMs <= nowMs) {
+              isWfExpiredUserInput = true;
+            } else if (nowMs - startedOrUpdatedMs > Math.max(timeoutMs, 60000)) {
+              isWfExpiredUserInput = true;
+            }
+          }
+        }
 
         let mappedStatus: ExecutionDisplayStatus = "running";
-        if (wf.status === "success") mappedStatus = "completed";
-        else if (wf.status === "error") mappedStatus = "error";
-        else if (wf.status === "cancelled") mappedStatus = "cancelled";
-        else if (wf.status === "waiting") {
+        if (isWfExpiredUserInput) {
+          mappedStatus = "completed";
+          isWfUserInput = false;
+        } else if (wf.status === "success" || wf.status === "completed") {
+          mappedStatus = "completed";
+        } else if (wf.status === "error") {
+          mappedStatus = "error";
+        } else if (wf.status === "cancelled") {
+          mappedStatus = "cancelled";
+        } else if (wf.status === "waiting") {
           if (isManuallyPaused) mappedStatus = "paused";
           else if (isWfDelay) mappedStatus = "waiting_delay";
           else if (isWfUserInput) mappedStatus = "waiting_user_input";
@@ -288,7 +399,7 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
           if (wf.finished_at) existing.finishedAt = wf.finished_at;
           if (wf.duration_ms) existing.durationMs = wf.duration_ms;
           if (wf.error_message) existing.errorMessage = wf.error_message;
-          if (wf.status === "cancelled" || wf.status === "error" || wf.status === "success") {
+          if (wf.status === "cancelled" || wf.status === "error" || wf.status === "success" || wf.status === "completed" || isWfExpiredUserInput) {
             existing.status = mappedStatus;
           }
           if (existing.sequenceName === "Workflow de Mensagens" || existing.sequenceName === "Workflow sem nome") {
@@ -307,7 +418,10 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
           let waitingType: "delay" | "user_input" | "poll" | "ura" | "call" | null = null;
           let delayFormatted: string | null = triggerPayload.delayFormatted || null;
 
-          if (isWfUserInput) {
+          if (isWfExpiredUserInput) {
+            waitingType = null;
+            stepName = "Finalizado (sem resposta)";
+          } else if (isWfUserInput) {
             waitingType = "user_input";
             stepName = "Aguardando resposta do usuário";
           } else if (isWfDelay) {

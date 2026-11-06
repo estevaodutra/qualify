@@ -531,16 +531,40 @@ Deno.serve(async (req) => {
               const timeoutResText = await timeoutResponse.text();
               console.log(`[Scheduler] Timeout trigger response for ${input.id}:`, timeoutResText.substring(0, 300));
             } else {
-              console.log(`[Scheduler] User input ${input.id} timed out, but no timeout branch connection was configured for node ${input.node_id}`);
+              console.log(`[Scheduler] User input ${input.id} timed out, but no timeout branch connection was configured for node ${input.node_id}. Ending workflow.`);
               if (input.execution_id) {
-                await supabase
-                  .from("workflow_executions")
-                  .update({
-                    status: "completed",
-                    updated_at: nowIso,
-                  })
-                  .eq("id", input.execution_id)
-                  .eq("status", "waiting");
+                await Promise.allSettled([
+                  supabase
+                    .from("workflow_executions")
+                    .update({
+                      status: "success",
+                      finished_at: nowIso,
+                      updated_at: nowIso,
+                    })
+                    .eq("id", input.execution_id),
+                  supabase
+                    .from("sequence_executions")
+                    .update({
+                      status: "completed",
+                      updated_at: nowIso,
+                    })
+                    .eq("id", input.execution_id),
+                ]);
+              }
+
+              if (input.sequence_id && input.phone) {
+                const cleanPhone8 = input.phone.replace(/\D/g, "").slice(-8);
+                if (cleanPhone8) {
+                  await supabase
+                    .from("sequence_executions")
+                    .update({
+                      status: "completed",
+                      updated_at: nowIso,
+                    })
+                    .eq("sequence_id", input.sequence_id)
+                    .ilike("trigger_context->>respondentPhone", `%${cleanPhone8}%`)
+                    .eq("status", "paused");
+                }
               }
             }
           } catch (itemErr) {
@@ -550,6 +574,102 @@ Deno.serve(async (req) => {
       }
     } catch (expiredBlockErr) {
       console.error("[Scheduler] Error in expired user inputs block:", expiredBlockErr);
+    }
+
+    // ============= CLEANUP EXPIRED SEQUENCE EXECUTIONS WAITING FOR USER INPUT =============
+    try {
+      const nowIso = now.toISOString();
+      const { data: pausedUserInputs, error: pausedErr } = await supabase
+        .from("sequence_executions")
+        .select("id, user_id, sequence_id, current_node_id, trigger_context, created_at, updated_at")
+        .eq("status", "paused")
+        .eq("trigger_context->>waitingType", "user_input")
+        .limit(100);
+
+      if (!pausedErr && pausedUserInputs && pausedUserInputs.length > 0) {
+        for (const pSeq of pausedUserInputs) {
+          try {
+            const trigCtx = (pSeq.trigger_context || {}) as Record<string, any>;
+            const waitingNodeId = trigCtx.waitingNodeId || pSeq.current_node_id;
+            const expiresAtStr = trigCtx.expiresAt;
+            const timeoutMs = trigCtx.timeoutMs || 3600000;
+            const startedOrUpdated = new Date(pSeq.updated_at || pSeq.created_at).getTime();
+            const isExpired = expiresAtStr
+              ? new Date(expiresAtStr).getTime() <= now.getTime()
+              : Date.now() - startedOrUpdated > timeoutMs;
+
+            if (isExpired) {
+              const { data: activeInput } = await supabase
+                .from("workflow_user_inputs")
+                .select("id, status, expires_at")
+                .eq("execution_id", pSeq.id)
+                .eq("status", "waiting")
+                .gt("expires_at", nowIso)
+                .maybeSingle();
+
+              if (!activeInput) {
+                console.log(`[Scheduler] Cleaning up expired paused sequence_execution ${pSeq.id} (node: ${waitingNodeId})`);
+                
+                let timeoutNodeId: string | null = trigCtx.timeoutNodeId || null;
+                if (!timeoutNodeId && waitingNodeId && pSeq.sequence_id) {
+                  const { data: conns } = await supabase
+                    .from("sequence_connections")
+                    .select("target_node_id, condition_path")
+                    .eq("sequence_id", pSeq.sequence_id)
+                    .eq("source_node_id", waitingNodeId);
+                  const timeoutConn = (conns || []).find((c: any) => c.condition_path === "timeout");
+                  timeoutNodeId = timeoutConn?.target_node_id || null;
+                }
+
+                if (timeoutNodeId) {
+                  console.log(`[Scheduler] Resuming paused sequence_execution ${pSeq.id} to timeoutNodeId ${timeoutNodeId}`);
+                  await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${supabaseServiceKey}`,
+                    },
+                    body: JSON.stringify({
+                      sequenceId: pSeq.sequence_id,
+                      userId: pSeq.user_id,
+                      startFromNodeId: timeoutNodeId,
+                      resumedExecution: true,
+                      executionId: pSeq.id,
+                      triggerContext: {
+                        ...trigCtx,
+                        resumedFromUserInput: true,
+                        resumedAsTimeout: true,
+                        resumeNodeId: timeoutNodeId,
+                      }
+                    }),
+                  });
+                } else {
+                  console.log(`[Scheduler] No timeout connection for expired sequence_execution ${pSeq.id}. Ending workflow as completed.`);
+                  await Promise.allSettled([
+                    supabase
+                      .from("sequence_executions")
+                      .update({ status: "completed", updated_at: nowIso })
+                      .eq("id", pSeq.id),
+                    supabase
+                      .from("workflow_executions")
+                      .update({ status: "success", finished_at: nowIso, updated_at: nowIso })
+                      .eq("id", pSeq.id),
+                    supabase
+                      .from("workflow_user_inputs")
+                      .update({ status: "timeout", updated_at: nowIso })
+                      .eq("execution_id", pSeq.id)
+                      .eq("status", "waiting")
+                  ]);
+                }
+              }
+            }
+          } catch (pItemErr) {
+            console.error(`[Scheduler] Error checking paused user input execution ${pSeq.id}:`, pItemErr);
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      console.error("[Scheduler] Error in expired sequence executions cleanup:", cleanupErr);
     }
 
     // ============= PROCESS SCHEDULED MESSAGES =============

@@ -1,6 +1,6 @@
 {
-  "commit": "6b914532d37cbcdc25941e8881ad3b05fe916487",
-  "shortCommit": "6b91453",
-  "message": "feat(workflows): sort workflows alphabetically with natural numeric collation",
-  "builtAt": "2026-11-06T16:56:50.518Z"
+  "commit": "e42f3dff4e118ca1ad4638c3c0f6551e70688bc3",
+  "shortCommit": "e42f3df",
+  "message": "fix(telephony): auto-conectar SIP em background, sincronizar ramal e resolver erro 424 da API4COM",
+  "builtAt": "2026-11-06T16:59:46.933Z"
 }
