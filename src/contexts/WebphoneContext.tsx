@@ -38,6 +38,8 @@ export interface WebphoneContextType {
   isPrimaryTab: boolean;
 
   // Actions
+  connectSIP: () => Promise<void>;
+  disconnectSIP: () => void;
   toggleOnline: (state?: boolean) => Promise<void>;
   dial: (params: { phone: string; leadId?: string; leadName?: string; campaignId?: string }) => Promise<boolean>;
   hangup: () => Promise<void>;
@@ -206,10 +208,19 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
 
+  
     return () => {
       channel.close();
     };
   }, [operator?.extension]);
+
+  // Auto-conectar SIP em segundo plano quando credenciais estiverem prontas
+  useEffect(() => {
+    if (hasSipConfig && operator?.extension && status === "disconnected" && !isOnline) {
+      console.log("[Webphone] Auto-conectando SIP em segundo plano para ramal:", operator.extension);
+      connectSIP();
+    }
+  }, [hasSipConfig, operator?.extension, status, isOnline, connectSIP]);
 
   const claimPrimaryTab = useCallback(() => {
     if (channelRef.current) {
@@ -282,29 +293,55 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         },
       });
 
-      // Eventos SIP
-      wp.on("registered", () => {
+      const ua = wp.getUserAgent?.();
+
+      const onRegistered = () => {
         clearTimeout(registrationTimeout);
-        console.log("[Webphone] SIP Registrado com sucesso!");
+        console.log("[Webphone] SIP Registrado com sucesso para ramal:", operator.extension);
         setStatus("connected");
         setIsOnline(true);
         setErrorMessage(null);
-      });
+      };
 
-      wp.on("unregistered", () => {
+      const onUnregistered = () => {
         clearTimeout(registrationTimeout);
         console.log("[Webphone] SIP Desregistrado");
         setStatus("disconnected");
         setIsOnline(false);
-      });
+      };
 
-      wp.on("registrationFailed", (data: any) => {
+      const onRegistrationFailed = (data: any) => {
         clearTimeout(registrationTimeout);
         console.error("[Webphone] Falha no registro SIP:", data);
         setStatus("error");
         setIsOnline(false);
         setErrorMessage("Falha de autenticação SIP. Verifique a senha do ramal.");
-      });
+      };
+
+      // Registrar listeners tanto no wp quanto no userAgent
+      wp.on("userAgent.registered", onRegistered);
+      wp.on("registered", onRegistered);
+      ua?.on?.("registered", onRegistered);
+
+      wp.on("userAgent.unregistered", onUnregistered);
+      wp.on("unregistered", onUnregistered);
+      ua?.on?.("unregistered", onUnregistered);
+
+      wp.on("userAgent.registrationFailed", onRegistrationFailed);
+      wp.on("registrationFailed", onRegistrationFailed);
+      ua?.on?.("registrationFailed", onRegistrationFailed);
+
+      // INICIAR REGISTRO SIP NO WEBSOCKET
+      try {
+        console.log("[Webphone] Iniciando UA SIP para ramal:", operator.extension);
+        ua?.start?.(
+          String(operator.extension),
+          String(operator.sip_password),
+          String(operator.sip_domain)
+        );
+      } catch (startErr) {
+        console.warn("[Webphone] Aviso ao chamar ua.start:", startErr);
+      }
 
       // AUTO-ATENDIMENTO DA API4COM
       wp.on("call.created", (lwp: any, call: LibwebphoneCall) => {
@@ -373,7 +410,9 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const disconnectSIP = useCallback(() => {
     if (webphoneRef.current) {
       try {
-        webphoneRef.current.getUserAgent()?.unregister();
+        const ua = webphoneRef.current.getUserAgent?.();
+        ua?.stop?.();
+        ua?.unregister?.();
       } catch {}
       webphoneRef.current = null;
     }
@@ -580,6 +619,8 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         operator,
         hasSipConfig,
         isPrimaryTab,
+        connectSIP,
+        disconnectSIP,
         toggleOnline,
         dial,
         hangup,

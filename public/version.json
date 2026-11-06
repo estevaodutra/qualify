@@ -1,6 +1,6 @@
 {
-  "commit": "e42f3dff4e118ca1ad4638c3c0f6551e70688bc3",
-  "shortCommit": "e42f3df",
-  "message": "fix(telephony): auto-conectar SIP em background, sincronizar ramal e resolver erro 424 da API4COM",
-  "builtAt": "2026-11-06T16:59:46.933Z"
+  "commit": "1245caec41676906269059d7d8460d16f9ca9b77",
+  "shortCommit": "1245cae",
+  "message": "feat(chat): add unpin/collapse toggle for quick replies sidebar",
+  "builtAt": "2026-11-06T17:39:20.724Z"
 }

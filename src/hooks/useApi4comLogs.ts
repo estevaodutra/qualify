@@ -62,22 +62,15 @@ export function useApi4comLogs() {
           audio_url,
           external_call_id,
           api4com_metadata,
+          lead_id,
+          campaign_id,
           call_operators (
             id,
             operator_name,
             extension,
             sip_domain
           ),
-          call_leads (
-            id,
-            name,
-            phone
-          ),
           companies (
-            id,
-            name
-          ),
-          call_campaigns (
             id,
             name
           )
@@ -90,7 +83,23 @@ export function useApi4comLogs() {
         throw error;
       }
 
-      return (data || []).map((c: any): Api4comLogItem => {
+      const rows: any[] = data || [];
+      const leadIds = Array.from(new Set(rows.map((c) => c.lead_id).filter(Boolean)));
+      const campaignIds = Array.from(new Set(rows.map((c) => c.campaign_id).filter(Boolean)));
+
+      const [leadsRes, campaignsRes] = await Promise.all([
+        leadIds.length > 0
+          ? (supabase as any).from("leads").select("id, name, phone").in("id", leadIds)
+          : Promise.resolve({ data: [] }),
+        campaignIds.length > 0
+          ? (supabase as any).from("call_campaigns").select("id, name").in("id", campaignIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const leadsMap = new Map((leadsRes.data || []).map((l: any) => [l.id, l]));
+      const campaignsMap = new Map((campaignsRes.data || []).map((cp: any) => [cp.id, cp]));
+
+      return rows.map((c: any): Api4comLogItem => {
         const rawDate = c.created_at || c.started_at || new Date().toISOString();
         let formattedDate = "-";
         try {
@@ -107,6 +116,12 @@ export function useApi4comLogs() {
         }
 
         const duration = Number(c.duration_seconds) || 0;
+        const matchedLead = c.lead_id ? leadsMap.get(c.lead_id) : null;
+        const matchedCampaign = c.campaign_id ? campaignsMap.get(c.campaign_id) : null;
+
+        const meta = c.api4com_metadata || {};
+        const fallbackPhone = meta.destination || meta.phone || meta.to || null;
+        const fallbackName = meta.leadName || (fallbackPhone ? `Discagem (${fallbackPhone})` : null);
 
         return {
           id: c.id,
@@ -121,7 +136,7 @@ export function useApi4comLogs() {
           hangupCauseCode: c.hangup_cause_code ? String(c.hangup_cause_code) : null,
           audioUrl: c.audio_url || null,
           externalCallId: c.external_call_id || null,
-          api4comMetadata: c.api4com_metadata || null,
+          api4comMetadata: meta,
           operator: c.call_operators
             ? {
                 id: c.call_operators.id,
@@ -130,11 +145,17 @@ export function useApi4comLogs() {
                 sipDomain: c.call_operators.sip_domain || null,
               }
             : null,
-          lead: c.call_leads
+          lead: matchedLead
             ? {
-                id: c.call_leads.id,
-                name: c.call_leads.name || null,
-                phone: c.call_leads.phone || null,
+                id: matchedLead.id,
+                name: matchedLead.name || null,
+                phone: matchedLead.phone || null,
+              }
+            : fallbackPhone
+            ? {
+                id: c.lead_id || "direct",
+                name: fallbackName,
+                phone: fallbackPhone,
               }
             : null,
           company: c.companies
@@ -143,10 +164,10 @@ export function useApi4comLogs() {
                 name: c.companies.name,
               }
             : null,
-          campaign: c.call_campaigns
+          campaign: matchedCampaign
             ? {
-                id: c.call_campaigns.id,
-                name: c.call_campaigns.name,
+                id: matchedCampaign.id,
+                name: matchedCampaign.name,
               }
             : null,
         };

@@ -288,10 +288,11 @@ export function useAdminUsers(showDeleted: boolean = false) {
     queryKey: ["admin", "users", { showDeleted }],
     queryFn: async () => {
       const sb = supabase as any;
-      const [profilesRes, rolesRes, membersRes] = await Promise.all([
+      const [profilesRes, rolesRes, membersRes, operatorsRes] = await Promise.all([
         sb.from("profiles").select("id, email, full_name, created_at, is_deleted, api4com_token, api4com_extension, api4com_domain, api4com_synced_at").order("created_at", { ascending: false }),
         sb.from("user_roles").select("user_id, role"),
         sb.from("company_members").select("user_id").eq("is_active", true),
+        sb.from("call_operators").select("user_id, extension, api4com_token, sip_domain"),
       ]);
 
       const filteredProfiles = showDeleted 
@@ -306,11 +307,28 @@ export function useAdminUsers(showDeleted: boolean = false) {
         memberCounts.set(m.user_id, (memberCounts.get(m.user_id) || 0) + 1);
       });
 
-      return filteredProfiles.map((p: any) => ({
-        ...p,
-        is_superadmin: superSet.has(p.id),
-        company_count: memberCounts.get(p.id) || 0,
-      })) as AdminUser[];
+      const operatorsByUser = new Map<string, any>();
+      (operatorsRes.data || []).forEach((op: any) => {
+        if (op.user_id && op.api4com_token) {
+          operatorsByUser.set(op.user_id, op);
+        }
+      });
+
+      return filteredProfiles.map((p: any) => {
+        const op = operatorsByUser.get(p.id);
+        const resolvedToken = p.api4com_token || op?.api4com_token || null;
+        const resolvedExt = p.api4com_extension || op?.extension || null;
+        const resolvedDomain = p.api4com_domain || op?.sip_domain || null;
+
+        return {
+          ...p,
+          api4com_token: resolvedToken,
+          api4com_extension: resolvedExt,
+          api4com_domain: resolvedDomain,
+          is_superadmin: superSet.has(p.id),
+          company_count: memberCounts.get(p.id) || 0,
+        };
+      }) as AdminUser[];
     },
   });
 }

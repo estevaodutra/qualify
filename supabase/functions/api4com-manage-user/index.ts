@@ -284,9 +284,9 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Senha padrão forte caso não seja informada
-      if (!password || password.length < 8) {
-        password = `Qualify@${Math.random().toString(36).slice(-6)}!`;
+      // Senha padrão oficial da organização API4COM
+      if (!password) {
+        password = "carvalho159";
       }
 
       const master = await getMasterConfig();
@@ -409,6 +409,26 @@ Deno.serve(async (req) => {
           } catch (findErr) {
             console.warn("[api4com-manage-user] Erro ao buscar usuário existente:", findErr);
           }
+        }
+
+        // Fallback: verificar se já temos o token salvo no banco de dados para este perfil
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("api4com_token, api4com_extension, api4com_domain")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (existingProfile?.api4com_token) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Token já configurado e ativo no perfil.",
+              token: existingProfile.api4com_token,
+              extension: existingProfile.api4com_extension,
+              domain: existingProfile.api4com_domain,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
 
         const friendlyMsg =
