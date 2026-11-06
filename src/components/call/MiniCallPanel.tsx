@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWebphone } from "@/contexts/WebphoneContext";
 import { useCallFloatingStore, CallDialogData } from "@/stores/callFloating.store";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { formatPhone, cn } from "@/lib/utils";
@@ -104,6 +105,7 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { isOnline, status: sipStatus, connectSIP } = useWebphone();
   const [activeTab, setActiveTab] = useState<"dialer" | "queue" | "in_progress" | "history">("dialer");
   const [dialerNumber, setDialerNumber] = useState("");
   const [dialerLeadName, setDialerLeadName] = useState("");
@@ -566,6 +568,9 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
   };
 
   const handleDialNumber = () => {
+    if (!isOnline) {
+      connectSIP();
+    }
     const clean = dialerNumber.replace(/\D/g, "");
     if (!clean || clean.length < 8) {
       toast.error("Digite um número com DDD para discar (mínimo 8 dígitos).");

@@ -24,34 +24,81 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { operator_id, phone, lead_id, campaign_id } = await req.json();
+    const { operator_id, user_id, phone, lead_id, campaign_id } = await req.json();
 
-    if (!operator_id || !phone) {
+    if (!phone) {
       return new Response(
-        JSON.stringify({ success: false, error: "operator_id e phone são obrigatórios" }),
+        JSON.stringify({ success: false, error: "Número de telefone é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 1. Buscar dados do operador
-    const { data: operator, error: opError } = await supabase
-      .from("call_operators")
-      .select("id, operator_name, extension, api4com_token, sip_domain, company_id")
-      .eq("id", operator_id)
-      .single();
+    // 1. Localizar operador pelo operator_id ou user_id
+    let operator: any = null;
 
-    if (opError || !operator) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Operador não encontrado" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (operator_id) {
+      const { data: op } = await supabase
+        .from("call_operators")
+        .select("id, operator_name, extension, api4com_token, sip_domain, company_id, user_id")
+        .eq("id", operator_id)
+        .maybeSingle();
+      operator = op;
     }
 
-    if (!operator.api4com_token || !operator.extension) {
+    if (!operator && user_id) {
+      const { data: opList } = await supabase
+        .from("call_operators")
+        .select("id, operator_name, extension, api4com_token, sip_domain, company_id, user_id")
+        .eq("user_id", user_id)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      operator = opList?.[0] || null;
+    }
+
+    // Se o operador ainda não tiver token ou ramal preenchido, busca diretamente no profiles
+    const targetUserId = operator?.user_id || user_id;
+    if ((!operator?.api4com_token || !operator?.extension) && targetUserId) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("api4com_token, api4com_extension, api4com_domain, api4com_password, full_name, email")
+        .eq("id", targetUserId)
+        .maybeSingle();
+
+      if (prof?.api4com_token && prof?.api4com_extension) {
+        if (!operator) {
+          operator = {
+            id: null,
+            operator_name: prof.full_name || prof.email || "Operador",
+            extension: prof.api4com_extension,
+            api4com_token: prof.api4com_token,
+            sip_domain: prof.api4com_domain || "d2x.api4com.com",
+            company_id: null,
+            user_id: targetUserId,
+          };
+        } else {
+          operator.extension = prof.api4com_extension;
+          operator.api4com_token = prof.api4com_token;
+          operator.sip_domain = prof.api4com_domain || "d2x.api4com.com";
+          // Atualiza o operador no banco para as próximas consultas
+          await supabase
+            .from("call_operators")
+            .update({
+              extension: prof.api4com_extension,
+              api4com_token: prof.api4com_token,
+              sip_domain: prof.api4com_domain || "d2x.api4com.com",
+              sip_password: prof.api4com_password || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", operator.id);
+        }
+      }
+    }
+
+    if (!operator?.api4com_token || !operator?.extension) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Operador não possui token ou ramal API4COM configurado. Sincronize o ramal primeiro.",
+          error: "Operador não possui token ou ramal API4COM configurado no sistema.",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -63,8 +110,9 @@ Deno.serve(async (req) => {
     const { data: callLog, error: logError } = await supabase
       .from("call_logs")
       .insert({
-        company_id: operator.company_id,
-        operator_id: operator.id,
+        company_id: operator.company_id || null,
+        operator_id: operator.id || null,
+        user_id: targetUserId || null,
         lead_id: lead_id || null,
         campaign_id: campaign_id || null,
         call_status: "dialing",
@@ -92,6 +140,8 @@ Deno.serve(async (req) => {
         callRef: `cr_${callLog.id.slice(0, 8)}_${Date.now()}`,
       },
     };
+
+    console.log(`[api4com-call-dial] Enviando POST /calls para ramal ${operator.extension} -> ${formattedPhone}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 segundos conforme doc API4COM
@@ -133,7 +183,9 @@ Deno.serve(async (req) => {
       if (dialRes.status === 402 || dialRes.status === 403) friendlyError = "Plano da API4COM sem saldo ou expirado.";
       if (dialRes.status === 404) friendlyError = "Ramal não encontrado na API4COM. Sincronize novamente.";
       if (dialRes.status === 422) friendlyError = "Número de telefone inválido.";
-      if (dialRes.status === 424) friendlyError = "Webphone desconectado. Verifique se o operador está online.";
+      if (dialRes.status === 424) {
+        friendlyError = `Webphone do ramal ${operator.extension} não está conectado no navegador. Aguarde o registro SIP conectar.`;
+      }
       if (dialRes.status === 429) friendlyError = "Limite de chamadas por minuto excedido no ramal.";
 
       await supabase
@@ -148,46 +200,36 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: false,
           error: friendlyError,
-          status: dialRes.status,
-          details: dialData,
+          rawError: dialData,
           callLogId: callLog.id,
         }),
         { status: dialRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 4. Chamada aceita com sucesso (Webphone do operador atendeu)
-    const externalCallId = dialData.id;
+    // 4. Chamada iniciada com sucesso (ramal do operador atendeu automaticamente)
     await supabase
       .from("call_logs")
       .update({
-        external_call_id: externalCallId,
-        call_status: "ringing", // Webphone atendeu, agora tocando para o cliente
+        external_call_id: dialData.id || null,
+        call_status: "ringing",
       })
       .eq("id", callLog.id);
-
-    await supabase
-      .from("call_operators")
-      .update({
-        current_call_id: callLog.id,
-        status: "on_call",
-      })
-      .eq("id", operator.id);
 
     return new Response(
       JSON.stringify({
         success: true,
+        callId: dialData.id,
         callLogId: callLog.id,
-        externalCallId,
-        called: formattedPhone,
-        message: "Chamada iniciada com sucesso!",
+        status: "ringing",
+        message: "Chamada iniciada. Discando para o destino...",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("[api4com-call-dial] Erro:", error);
+    console.error("[api4com-call-dial] Erro inesperado:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Erro interno ao discar" }),
+      JSON.stringify({ success: false, error: error.message || "Erro interno do servidor" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

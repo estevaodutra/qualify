@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Calendar, Phone, PhoneOff, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine, Maximize2, Minimize2, Minus, MessageSquare } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
+import { useWebphone } from "@/contexts/WebphoneContext";
 import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { MiniCallPanel } from "@/components/call/MiniCallPanel";
@@ -111,6 +112,7 @@ export function CallActionDialog({
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
+  const { isOnline, status: sipStatus, connectSIP } = useWebphone();
   const view = useCallFloatingStore((s) => s.view);
   const setView = useCallFloatingStore((s) => s.setView);
   const [isDocked, setIsDocked] = useState(true);
@@ -1131,6 +1133,14 @@ export function CallActionDialog({
 
       // Se temos API4COM: Dispara chamada nativa diretamente na API4COM!
       if (operatorData?.api4com_token && operatorData?.extension) {
+        if (!isOnline) {
+          try {
+            await connectSIP();
+            await new Promise((r) => setTimeout(r, 1200));
+          } catch (e) {
+            console.warn("[CallActionDialog] Aviso ao conectar SIP:", e);
+          }
+        }
         if (isWorkflowCall && realTaskId) {
           await supabase
             .from("workflow_call_tasks")
