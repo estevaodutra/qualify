@@ -202,8 +202,9 @@ Deno.serve(async (req) => {
           error: friendlyError,
           rawError: dialData,
           callLogId: callLog.id,
+          httpStatus: dialRes.status,
         }),
-        { status: dialRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

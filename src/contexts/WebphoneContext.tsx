@@ -38,7 +38,7 @@ export interface WebphoneContextType {
   isPrimaryTab: boolean;
 
   // Actions
-  connectSIP: () => Promise<void>;
+  connectSIP: () => Promise<boolean>;
   disconnectSIP: () => void;
   toggleOnline: (state?: boolean) => Promise<void>;
   dial: (params: { phone: string; leadId?: string; leadName?: string; campaignId?: string }) => Promise<boolean>;
@@ -235,170 +235,189 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   // 3. Inicializar e Conectar Webphone SIP
-  const connectSIP = useCallback(async () => {
+  const connectSIP = useCallback(async (): Promise<boolean> => {
     if (!hasSipConfig || !operator) {
       setErrorMessage("Ramal API4COM não configurado.");
-      return;
+      return false;
     }
 
-    try {
-      setStatus("connecting");
-      setErrorMessage(null);
+    if (isOnline && webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
+      return true;
+    }
 
-      // Carregar libwebphone.js
-      await loadLibwebphone();
+    return new Promise<boolean>(async (resolve) => {
+      let settled = false;
+      let registrationTimeout: any = null;
 
-      if (!window.libwebphone) {
-        throw new Error("Biblioteca libwebphone indisponível");
-      }
-
-      // Reutilizar ou criar instância
-      if (webphoneRef.current) {
-        try {
-          webphoneRef.current.getUserAgent()?.unregister();
-        } catch {}
-      }
-
-      // Timeout de segurança para evitar loop infinito
-      const registrationTimeout = setTimeout(() => {
-        console.warn("[Webphone] Timeout aguardando registro SIP");
-        setStatus("error");
-        setIsOnline(false);
-        setErrorMessage("Tempo limite esgotado ao registrar no servidor SIP. Verifique a conexão com a internet.");
-      }, 12000);
-
-      const instanceId = `instance_${operator.id.slice(0, 8)}_${Date.now()}`;
-
-      const wp = new window.libwebphone({
-        dialpad: { renderTargets: [] },
-        audioContext: { renderTargets: [] },
-        mediaDevices: {
-          videoinput: { enabled: false },
-          renderTargets: [],
-        },
-        userAgent: {
-          renderTargets: [],
-          transport: {
-            sockets: [`wss://${operator.sip_domain}:6443`],
-            recovery_max_interval: 30,
-            recovery_min_interval: 2,
-          },
-          authentication: {
-            username: String(operator.extension),
-            password: String(operator.sip_password),
-            realm: String(operator.sip_domain),
-          },
-          user_agent: {
-            instance_id: instanceId,
-            register: true,
-            register_expires: 600,
-            no_answer_timeout: 30,
-            user_agent: "qualify-crm-webphone",
-          },
-        },
-      });
-
-      const ua = wp.getUserAgent?.();
-
-      const onRegistered = () => {
-        clearTimeout(registrationTimeout);
-        console.log("[Webphone] SIP Registrado com sucesso para ramal:", operator.extension);
-        setStatus("connected");
-        setIsOnline(true);
-        setErrorMessage(null);
+      const settle = (ok: boolean) => {
+        if (!settled) {
+          settled = true;
+          if (registrationTimeout) clearTimeout(registrationTimeout);
+          resolve(ok);
+        }
       };
 
-      const onUnregistered = () => {
-        clearTimeout(registrationTimeout);
-        console.log("[Webphone] SIP Desregistrado");
-        setStatus("disconnected");
-        setIsOnline(false);
-      };
-
-      const onRegistrationFailed = (data: any) => {
-        clearTimeout(registrationTimeout);
-        console.error("[Webphone] Falha no registro SIP:", data);
-        setStatus("error");
-        setIsOnline(false);
-        setErrorMessage("Falha de autenticação SIP. Verifique a senha do ramal.");
-      };
-
-      // Registrar listeners tanto no wp quanto no userAgent
-      wp.on("userAgent.registered", onRegistered);
-      wp.on("registered", onRegistered);
-      ua?.on?.("registered", onRegistered);
-
-      wp.on("userAgent.unregistered", onUnregistered);
-      wp.on("unregistered", onUnregistered);
-      ua?.on?.("unregistered", onUnregistered);
-
-      wp.on("userAgent.registrationFailed", onRegistrationFailed);
-      wp.on("registrationFailed", onRegistrationFailed);
-      ua?.on?.("registrationFailed", onRegistrationFailed);
-
-      // INICIAR REGISTRO SIP NO WEBSOCKET
       try {
-        console.log("[Webphone] Iniciando UA SIP para ramal:", operator.extension);
-        ua?.start?.(
-          String(operator.extension),
-          String(operator.sip_password),
-          String(operator.sip_domain)
-        );
-      } catch (startErr) {
-        console.warn("[Webphone] Aviso ao chamar ua.start:", startErr);
-      }
+        setStatus("connecting");
+        setErrorMessage(null);
 
-      // AUTO-ATENDIMENTO DA API4COM
-      wp.on("call.created", (lwp: any, call: LibwebphoneCall) => {
-        console.log("[Webphone] call.created recebida");
+        // Carregar libwebphone.js
+        await loadLibwebphone();
 
-        if (!call.isPrimary()) {
-          console.warn("[Webphone] Chamada secundária rejeitada.");
-          return call.reject();
+        if (!window.libwebphone) {
+          throw new Error("Biblioteca libwebphone indisponível");
         }
 
-        currentCallRef.current = call;
-
-        const customHeaders = call.getCustomHeaders?.() || {};
-        const isApi4Call = customHeaders["X-Api4comintegratedcall"] === "true";
-
-        if (isApi4Call) {
-          console.log("[Webphone] Header X-Api4comintegratedcall detectado! Auto-atendendo...");
-          call.answer();
-          setStatus("ringing"); // Ramal atendeu, agora aguardando o lead
+        // Reutilizar ou criar instância
+        if (webphoneRef.current) {
+          try {
+            webphoneRef.current.getUserAgent()?.stop?.();
+            webphoneRef.current.getUserAgent()?.unregister?.();
+          } catch {}
         }
 
-        // Listener de status da chamada
-        call.on?.("call.answered", () => {
-          console.log("[Webphone] Chamada em andamento (conversação)");
-          setStatus("in_call");
-          setDuration(0);
+        // Timeout de segurança para evitar loop infinito
+        registrationTimeout = setTimeout(() => {
+          console.warn("[Webphone] Timeout aguardando registro SIP");
+          setStatus("error");
+          setIsOnline(false);
+          setErrorMessage("Tempo limite esgotado ao registrar no servidor SIP. Verifique a conexão com a internet.");
+          settle(false);
+        }, 12000);
 
-          if (timerRef.current) clearInterval(timerRef.current);
-          timerRef.current = setInterval(() => {
-            setDuration((prev) => prev + 1);
-          }, 1000);
+        const instanceId = `instance_${operator.id.slice(0, 8)}_${Date.now()}`;
+
+        const wp = new window.libwebphone({
+          dialpad: { renderTargets: [] },
+          audioContext: { renderTargets: [] },
+          mediaDevices: {
+            videoinput: { enabled: false },
+            renderTargets: [],
+          },
+          userAgent: {
+            renderTargets: [],
+            transport: {
+              sockets: [`wss://${operator.sip_domain}:6443`],
+              recovery_max_interval: 30,
+              recovery_min_interval: 2,
+            },
+            authentication: {
+              username: String(operator.extension),
+              password: String(operator.sip_password),
+              realm: String(operator.sip_domain),
+            },
+            user_agent: {
+              instance_id: instanceId,
+              register: true,
+              register_expires: 600,
+              no_answer_timeout: 30,
+              user_agent: "qualify-crm-webphone",
+            },
+          },
         });
 
-        call.on?.("call.ended", () => {
-          console.log("[Webphone] Chamada encerrada pelo SIP");
+        const ua = wp.getUserAgent?.();
+
+        const onRegistered = () => {
+          console.log("[Webphone] SIP Registrado com sucesso para ramal:", operator.extension);
+          setStatus("connected");
+          setIsOnline(true);
+          setErrorMessage(null);
+          settle(true);
+        };
+
+        const onUnregistered = () => {
+          console.log("[Webphone] SIP Desregistrado");
+          setStatus("disconnected");
+          setIsOnline(false);
+        };
+
+        const onRegistrationFailed = (data: any) => {
+          console.error("[Webphone] Falha no registro SIP:", data);
+          setStatus("error");
+          setIsOnline(false);
+          setErrorMessage("Falha de autenticação SIP. Verifique a senha do ramal.");
+          settle(false);
+        };
+
+        // Registrar listeners tanto no wp quanto no userAgent
+        wp.on("userAgent.registered", onRegistered);
+        wp.on("registered", onRegistered);
+        ua?.on?.("registered", onRegistered);
+
+        wp.on("userAgent.unregistered", onUnregistered);
+        wp.on("unregistered", onUnregistered);
+        ua?.on?.("unregistered", onUnregistered);
+
+        wp.on("userAgent.registrationFailed", onRegistrationFailed);
+        wp.on("registrationFailed", onRegistrationFailed);
+        ua?.on?.("registrationFailed", onRegistrationFailed);
+
+        // INICIAR REGISTRO SIP NO WEBSOCKET
+        try {
+          console.log("[Webphone] Iniciando UA SIP para ramal:", operator.extension);
+          ua?.start?.(
+            String(operator.extension),
+            String(operator.sip_password),
+            String(operator.sip_domain)
+          );
+        } catch (startErr) {
+          console.warn("[Webphone] Aviso ao chamar ua.start:", startErr);
+        }
+
+        // AUTO-ATENDIMENTO DA API4COM
+        wp.on("call.created", (lwp: any, call: LibwebphoneCall) => {
+          console.log("[Webphone] call.created recebida");
+
+          if (!call.isPrimary()) {
+            console.warn("[Webphone] Chamada secundária rejeitada.");
+            return call.reject();
+          }
+
+          currentCallRef.current = call;
+
+          const customHeaders = call.getCustomHeaders?.() || {};
+          const isApi4Call = customHeaders["X-Api4comintegratedcall"] === "true";
+
+          if (isApi4Call) {
+            console.log("[Webphone] Header X-Api4comintegratedcall detectado! Auto-atendendo...");
+            call.answer();
+            setStatus("ringing"); // Ramal atendeu, agora aguardando o lead
+          }
+
+          // Listener de status da chamada
+          call.on?.("call.answered", () => {
+            console.log("[Webphone] Chamada em andamento (conversação)");
+            setStatus("in_call");
+            setDuration(0);
+
+            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current = setInterval(() => {
+              setDuration((prev) => prev + 1);
+            }, 1000);
+          });
+
+          call.on?.("call.ended", () => {
+            console.log("[Webphone] Chamada encerrada pelo SIP");
+            cleanupCall();
+          });
+        });
+
+        wp.on("call.destroyed", () => {
           cleanupCall();
         });
-      });
 
-      wp.on("call.destroyed", () => {
-        cleanupCall();
-      });
-
-      webphoneRef.current = wp;
-      claimPrimaryTab();
-    } catch (err: any) {
-      console.error("[Webphone] Erro ao conectar SIP:", err);
-      setStatus("error");
-      setIsOnline(false);
-      setErrorMessage(err.message || "Erro ao conectar ao servidor SIP.");
-    }
-  }, [hasSipConfig, operator, claimPrimaryTab, cleanupCall]);
+        webphoneRef.current = wp;
+        claimPrimaryTab();
+      } catch (err: any) {
+        console.error("[Webphone] Erro ao conectar SIP:", err);
+        setStatus("error");
+        setIsOnline(false);
+        setErrorMessage(err.message || "Erro ao conectar ao servidor SIP.");
+        settle(false);
+      }
+    });
+  }, [hasSipConfig, operator, isOnline, claimPrimaryTab, cleanupCall]);
 
 
   const disconnectSIP = useCallback(() => {

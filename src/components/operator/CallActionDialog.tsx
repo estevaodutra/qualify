@@ -1133,14 +1133,24 @@ export function CallActionDialog({
 
       // Se temos API4COM: Dispara chamada nativa diretamente na API4COM!
       if (operatorData?.api4com_token && operatorData?.extension) {
-        if (!isOnline) {
-          try {
-            await connectSIP();
-            await new Promise((r) => setTimeout(r, 1200));
-          } catch (e) {
-            console.warn("[CallActionDialog] Aviso ao conectar SIP:", e);
+        if (!isOnline && connectSIP) {
+          toast({
+            title: "Conectando Webphone...",
+            description: `Registrando ramal ${operatorData.extension} para a chamada...`,
+          });
+          const sipOk = await connectSIP();
+          if (!sipOk) {
+            toast({
+              title: "Webphone offline",
+              description: `Não foi possível registrar o ramal ${operatorData.extension}. Verifique a conexão com a internet e tente novamente.`,
+              variant: "destructive",
+            });
+            setIsDialing(false);
+            return;
           }
+          await new Promise((r) => setTimeout(r, 600));
         }
+
         if (isWorkflowCall && realTaskId) {
           await supabase
             .from("workflow_call_tasks")
@@ -1160,7 +1170,14 @@ export function CallActionDialog({
         });
 
         if (dialErr || !dialRes?.success) {
-          const msg = dialRes?.error || dialErr?.message || "Falha ao discar na API4COM";
+          let msg = dialRes?.error;
+          if (!msg && (dialErr as any)?.context) {
+            try {
+              const body = await (dialErr as any).context.json();
+              if (body?.error) msg = body.error;
+            } catch {}
+          }
+          if (!msg) msg = dialErr?.message || "Falha ao discar na API4COM";
           toast({ title: "Erro na chamada", description: msg, variant: "destructive" });
           setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
           if (isWorkflowCall && realTaskId) {

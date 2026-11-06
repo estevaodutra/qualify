@@ -1,6 +1,6 @@
 {
-  "commit": "aaecf5a94c92f1dceca33e19b03fb5802861453f",
-  "shortCommit": "aaecf5a",
-  "message": "fix(telephony): iniciar conexao UA SIP, auto-conectar webphone, resolver logs PGRST200 e tratar geracao de token",
-  "builtAt": "2026-11-06T17:57:30.913Z"
+  "commit": "8837efbd07ee3fef348cd29868aff6c80bd2b89e",
+  "shortCommit": "8837efb",
+  "message": "fix(webphone): resolver erro de inicializacao ReferenceError reordenando declaracoes no WebphoneContext",
+  "builtAt": "2026-11-06T18:13:41.949Z"
 }
