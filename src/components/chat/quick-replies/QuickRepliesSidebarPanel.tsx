@@ -12,17 +12,19 @@ import { cn } from "@/lib/utils";
 import {
   Search, Zap, MessageSquare, Image as ImageIcon, Video, Mic,
   Radio, FileText, Link2, ChevronDown, ChevronRight, TrendingUp,
-  Sparkles, Settings
+  Sparkles, Settings, PinOff, X
 } from "lucide-react";
 import QuickRepliesManagerModal from "./QuickRepliesManagerModal";
 
 interface QuickRepliesSidebarPanelProps {
   onSelectReply: (reply: QuickReply) => void;
+  onClose?: () => void;
   className?: string;
 }
 
 export default function QuickRepliesSidebarPanel({
   onSelectReply,
+  onClose,
   className,
 }: QuickRepliesSidebarPanelProps) {
   const { groups, quickReplies, isLoading } = useQuickReplies();
@@ -147,15 +149,29 @@ export default function QuickRepliesSidebarPanel({
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsManagerOpen(true)}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl"
-            title="Gerenciar Respostas Rápidas"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsManagerOpen(true)}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl"
+              title="Gerenciar Respostas Rápidas"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 rounded-xl transition-colors cursor-pointer"
+                title="Desfixar / Ocultar respostas rápidas"
+              >
+                <PinOff className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Search */}

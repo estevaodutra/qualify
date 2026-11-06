@@ -5,7 +5,7 @@ import LeadContextPanel from "./LeadContextPanel";
 import GroupContextPanel from "./group/GroupContextPanel";
 import { cn } from "@/lib/utils";
 
-export type ChatSidebarMode = "quick_replies" | "lead_details";
+export type ChatSidebarMode = "quick_replies" | "lead_details" | "hidden";
 
 interface ChatSidebarProps {
   conversation: ChatConversation;
@@ -34,12 +34,17 @@ export default function ChatSidebar({
     phone.includes("-group") ||
     customFields.is_group === true;
 
+  if (sidebarMode === "hidden") {
+    return null;
+  }
+
   return (
     <div className={cn("h-full w-[340px] shrink-0 relative flex overflow-hidden", className)}>
       {/* 1. Quick Replies Panel (Always mounted to preserve search, group collapse, and scroll state) */}
       <div className={cn("h-full w-[340px] shrink-0", sidebarMode !== "quick_replies" && "hidden")}>
         <QuickRepliesSidebarPanel
           onSelectReply={onSelectQuickReply}
+          onClose={() => onSetSidebarMode("hidden")}
         />
       </div>
 
@@ -49,14 +54,14 @@ export default function ChatSidebar({
           {isGroup ? (
             <GroupContextPanel
               conversation={conversation}
-              onClose={() => onSetSidebarMode("quick_replies")}
+              onClose={() => onSetSidebarMode("hidden")}
               onSelectConversation={onSelectConversation}
             />
           ) : (
             <LeadContextPanel
               conversation={conversation}
               stages={stages}
-              onClose={() => onSetSidebarMode("quick_replies")}
+              onClose={() => onSetSidebarMode("hidden")}
             />
           )}
         </div>

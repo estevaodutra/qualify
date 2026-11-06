@@ -54,7 +54,23 @@ export default function Chat() {
     }
   }, [companyIdParam, activeCompanyId, companies, setActiveCompany]);
   const isCopilotActive = selectedConvId === "copilot-ia" || copilotParam === "true";
-  const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
+  const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>(() => {
+    try {
+      const saved = localStorage.getItem("qualify_chat_sidebar_mode");
+      if (saved === "hidden" || saved === "quick_replies" || saved === "lead_details") {
+        return saved;
+      }
+    } catch {}
+    return "quick_replies";
+  });
+
+  const handleSetSidebarMode = (mode: ChatSidebarMode) => {
+    setSidebarMode(mode);
+    try {
+      localStorage.setItem("qualify_chat_sidebar_mode", mode);
+    } catch {}
+  };
+
   const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
 
   // Sync selectedConvId whenever the route conversationId changes
@@ -515,14 +531,38 @@ export default function Chat() {
                       </span>
                     )}
 
-                    {/* Desktop Eye button */}
-                    <div className="hidden lg:block">
+                    {/* Desktop Action Buttons: Respostas Rápidas toggle + Eye button */}
+                    <div className="hidden lg:flex items-center gap-1">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              onClick={() => setSidebarMode(prev => prev === "quick_replies" ? "lead_details" : "quick_replies")}
+                              onClick={() =>
+                                handleSetSidebarMode(sidebarMode === "quick_replies" ? "hidden" : "quick_replies")
+                              }
+                              className={cn(
+                                "p-1 rounded-lg transition-all duration-200 cursor-pointer shrink-0",
+                                sidebarMode === "quick_replies"
+                                  ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                              )}
+                            >
+                              <Zap className="h-4 w-4 fill-current" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="text-xs font-semibold z-[10000]">
+                            {sidebarMode === "quick_replies" ? "Ocultar respostas rápidas" : "Fixar respostas rápidas na lateral"}
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleSetSidebarMode(sidebarMode === "lead_details" ? "hidden" : "lead_details")
+                              }
                               className={cn(
                                 "p-1 rounded-lg transition-all duration-200 cursor-pointer shrink-0",
                                 sidebarMode === "lead_details"
@@ -538,9 +578,9 @@ export default function Chat() {
                               const p = selectedConv.lead?.phone || selectedConv.contact_phone || "";
                               const c = (selectedConv.lead?.custom_fields as Record<string, any>) || {};
                               const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
-                              return sidebarMode === "quick_replies" 
-                                ? (isGrp ? "Ver dados do grupo" : "Ver detalhes do lead")
-                                : "Voltar para respostas rápidas";
+                              return sidebarMode === "lead_details" 
+                                ? (isGrp ? "Ocultar dados do grupo" : "Ocultar detalhes do lead")
+                                : (isGrp ? "Ver dados do grupo" : "Ver detalhes do lead");
                             })()}
                           </TooltipContent>
                         </Tooltip>
@@ -758,13 +798,13 @@ export default function Chat() {
       </div>
 
       {/* 3. Desktop Chat Sidebar Column (Right) */}
-      {selectedConv && !isCopilotActive && (
-        <div className="hidden lg:block h-full shrink-0">
+      {selectedConv && !isCopilotActive && sidebarMode !== "hidden" && (
+        <div className="hidden lg:block h-full shrink-0 animate-in slide-in-from-right-2 duration-150">
           <ChatSidebar
             conversation={selectedConv}
             stages={pipelineStages}
             sidebarMode={sidebarMode}
-            onSetSidebarMode={setSidebarMode}
+            onSetSidebarMode={handleSetSidebarMode}
             onSelectConversation={handleSelectConv}
             onSelectQuickReply={(reply) => {
               setSelectedQuickReply(reply);
