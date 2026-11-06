@@ -3093,16 +3093,18 @@ export function UnifiedNodeConfigPanel({
 
           {/* TRIGGER_WORKFLOW - Ativar outro fluxo */}
           {node.nodeType === "trigger_workflow" && (() => {
-            const filteredWorkflows = workflows.filter((w) => {
-              const isCurrentlySelected = 
-                w.id === currentConfig.targetWorkflowId || 
-                w.sourceId === currentConfig.targetWorkflowId ||
-                w.id === currentConfig.workflowId ||
-                w.sourceId === currentConfig.workflowId ||
-                w.id === currentConfig.sequenceId ||
-                w.sourceId === currentConfig.sequenceId;
-              return isCurrentlySelected || isActionTriggerWorkflow(w);
-            });
+            const filteredWorkflows = workflows
+              .filter((w) => {
+                const isCurrentlySelected = 
+                  w.id === currentConfig.targetWorkflowId || 
+                  w.sourceId === currentConfig.targetWorkflowId ||
+                  w.id === currentConfig.workflowId ||
+                  w.sourceId === currentConfig.workflowId ||
+                  w.id === currentConfig.sequenceId ||
+                  w.sourceId === currentConfig.sequenceId;
+                return isCurrentlySelected || isActionTriggerWorkflow(w);
+              })
+              .sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR", { numeric: true, sensitivity: "base" }));
 
             const selectedWf = workflows.find(
               (w) => w.id === currentConfig.targetWorkflowId || w.sourceId === currentConfig.targetWorkflowId ||

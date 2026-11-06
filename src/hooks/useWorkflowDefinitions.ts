@@ -87,7 +87,7 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
         .from("workflow_definitions" as any)
         .select("*")
         .or(`company_id.eq.${activeCompanyId},company_id.is.null`)
-        .order("created_at", { ascending: false });
+        .order("name", { ascending: true });
 
       if (filters?.folderId === null) {
         query = query.is("folder_id", null);
@@ -149,9 +149,11 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
         }
       }
 
-      return rawDefs.map((d) => 
-        transformDbToFrontend(d, seqsMap.get(d.source_id), triggerNodesMap.get(d.source_id))
-      );
+      return rawDefs
+        .map((d) => 
+          transformDbToFrontend(d, seqsMap.get(d.source_id), triggerNodesMap.get(d.source_id))
+        )
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR", { numeric: true, sensitivity: "base" }));
     },
     enabled: !!user && !!activeCompanyId,
   });

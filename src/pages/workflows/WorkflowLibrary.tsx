@@ -95,19 +95,23 @@ export default function WorkflowLibrary() {
 
   const currentSubfolders = useMemo(() => {
     if (typeof selectedFolderId !== "string") return [];
-    return folders.filter((f) => f.parentId === selectedFolderId);
+    return folders
+      .filter((f) => f.parentId === selectedFolderId)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name, "pt-BR", { numeric: true, sensitivity: "base" }));
   }, [folders, selectedFolderId]);
 
   const visibleDefinitions = useMemo(() => {
-    return allDefinitions.filter((def) => {
-      if (selectedFolderId === null && def.folderId) return false;
-      if (typeof selectedFolderId === "string") {
-        if (def.folderId !== selectedFolderId) return false;
-      }
-      if (statusTab !== "all" && def.status !== statusTab) return false;
-      if (search && !def.name.toLowerCase().includes(search.toLowerCase()) && !(def.description || "").toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
+    return allDefinitions
+      .filter((def) => {
+        if (selectedFolderId === null && def.folderId) return false;
+        if (typeof selectedFolderId === "string") {
+          if (def.folderId !== selectedFolderId) return false;
+        }
+        if (statusTab !== "all" && def.status !== statusTab) return false;
+        if (search && !def.name.toLowerCase().includes(search.toLowerCase()) && !(def.description || "").toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR", { numeric: true, sensitivity: "base" }));
   }, [allDefinitions, selectedFolderId, statusTab, search]);
 
   const folderPendingDeleteObj = folders.find((f) => f.id === folderPendingDelete);

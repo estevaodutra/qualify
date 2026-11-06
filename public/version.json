@@ -1,6 +1,6 @@
 {
-  "commit": "614072d141fa2d4635ed48c63e99ff46b5fe3900",
-  "shortCommit": "614072d",
-  "message": "fix(call): restaurar balao original de discagem e integrar discagem nativa API4COM no card",
-  "builtAt": "2026-11-06T04:14:27.099Z"
+  "commit": "e8cbc326e85b97f1d061cf5f9defb3e3a5a8e288",
+  "shortCommit": "e8cbc32",
+  "message": "feat(dialer): adicionar teclado numerico nativo e discador avulso no painel de ligacoes",
+  "builtAt": "2026-11-06T16:05:12.914Z"
 }
