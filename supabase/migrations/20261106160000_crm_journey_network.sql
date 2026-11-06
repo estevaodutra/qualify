@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.crm_journey_lines (
   company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
   pipeline_id uuid NOT NULL REFERENCES public.pipelines(id) ON DELETE CASCADE,
   line_role text NOT NULL CHECK (line_role IN ('main', 'auxiliary')),
-  order_index integer NOT NULL DEFAULT 0,
+  order_index integer NOT NULL DEFAULT 0 CHECK (order_index >= 0),
   entry_stage_id uuid REFERENCES public.pipeline_stages(id) ON DELETE SET NULL,
   terminal_stage_id uuid REFERENCES public.pipeline_stages(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -52,11 +52,7 @@ ALTER TABLE public.crm_journey_lines ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS crm_journey_lines_read ON public.crm_journey_lines;
 CREATE POLICY crm_journey_lines_read ON public.crm_journey_lines
 FOR SELECT TO authenticated USING (public.is_company_member(company_id, auth.uid()));
-DROP POLICY IF EXISTS crm_journey_lines_write ON public.crm_journey_lines;
-CREATE POLICY crm_journey_lines_write ON public.crm_journey_lines
-FOR ALL TO authenticated
-USING (public.is_company_member(company_id, auth.uid()))
-WITH CHECK (public.is_company_member(company_id, auth.uid()));
+-- Writes go through crm_save_journey_lines so a partial map cannot be persisted.
 
 CREATE TABLE IF NOT EXISTS public.crm_journey_events (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -130,7 +126,8 @@ AFTER INSERT OR UPDATE OF pipeline_id, stage_id, status ON public.deals
 FOR EACH ROW EXECUTE FUNCTION public.crm_record_deal_journey();
 
 GRANT SELECT ON public.crm_journey_events TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.crm_journey_lines TO authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.crm_journey_lines FROM authenticated;
+GRANT SELECT ON public.crm_journey_lines TO authenticated;
 
 -- Atomic, company-scoped replacement for the visual map configuration.
 CREATE OR REPLACE FUNCTION public.crm_save_journey_lines(p_company_id uuid, p_lines jsonb)
@@ -138,7 +135,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   item jsonb;
 BEGIN
-  IF auth.uid() IS NULL OR NOT public.is_company_member(p_company_id, auth.uid()) THEN
+  IF auth.uid() IS NULL OR NOT public.is_company_admin(p_company_id, auth.uid()) THEN
     RAISE EXCEPTION 'Not authorized to configure this company';
   END IF;
   IF jsonb_typeof(p_lines) IS DISTINCT FROM 'array' THEN
@@ -150,6 +147,10 @@ BEGIN
   IF (SELECT count(*) FROM jsonb_array_elements(p_lines)) >
      (SELECT count(DISTINCT l->>'pipeline_id') FROM jsonb_array_elements(p_lines) l) THEN
     RAISE EXCEPTION 'Duplicated pipeline in map';
+  END IF;
+  IF (SELECT count(*) FROM jsonb_array_elements(p_lines) l
+      WHERE l->>'line_role' = 'main' AND l->>'order_index' = '0') <> 1 THEN
+    RAISE EXCEPTION 'Exactly one main starting pipeline is required';
   END IF;
   DELETE FROM public.crm_journey_lines WHERE company_id = p_company_id;
   FOR item IN SELECT value FROM jsonb_array_elements(p_lines) LOOP
