@@ -18,9 +18,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CriafyLogsTab } from "@/components/admin/CriafyLogsTab";
+import { Api4comLogsTab } from "@/components/admin/Api4comLogsTab";
 import { 
   RefreshCw, Download, Search, CheckCircle, XCircle, Clock, Activity, 
-  Loader2, Copy, Check, Eye, Code, ArrowDownLeft, ArrowUpRight, MessageSquare, Instagram
+  Loader2, Copy, Check, Eye, Code, ArrowDownLeft, ArrowUpRight, MessageSquare, Instagram, PhoneCall
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -447,7 +448,9 @@ export default function Logs() {
         description={
           activeTab === "whatsapp"
             ? "Monitore todos os eventos de entrada e saída do WhatsApp e Webhooks (retenção de 72h)"
-            : "Monitore publicações, requisições da Meta Instagram Graph API, códigos de erro e payloads"
+            : activeTab === "criafy"
+            ? "Monitore publicações, requisições da Meta Instagram Graph API, códigos de erro e payloads"
+            : "Monitore chamadas, requisições de discagem, webhooks da API4COM, status de conexão e gravações"
         }
         actions={
           activeTab === "whatsapp" ? (
@@ -467,7 +470,7 @@ export default function Logs() {
 
       {/* Subpage Tabs Switcher */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="whatsapp" className="gap-2 font-medium">
             <MessageSquare className="h-4 w-4 text-emerald-600" />
             WhatsApp / Disparos
@@ -475,6 +478,10 @@ export default function Logs() {
           <TabsTrigger value="criafy" className="gap-2 font-medium">
             <Instagram className="h-4 w-4 text-purple-600" />
             Qualify / Criafy (Meta)
+          </TabsTrigger>
+          <TabsTrigger value="api4com" className="gap-2 font-medium">
+            <PhoneCall className="h-4 w-4 text-indigo-600" />
+            API forcom (Telefonia)
           </TabsTrigger>
         </TabsList>
 
@@ -724,6 +731,10 @@ export default function Logs() {
 
         <TabsContent value="criafy" className="space-y-6 m-0">
           <CriafyLogsTab />
+        </TabsContent>
+
+        <TabsContent value="api4com" className="space-y-6 m-0">
+          <Api4comLogsTab />
         </TabsContent>
       </Tabs>
     </div>

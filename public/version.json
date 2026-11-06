@@ -1,6 +1,6 @@
 {
-  "commit": "f12bec3f58537aad3a87b560eecb155b86ae662f",
-  "shortCommit": "f12bec3",
-  "message": "feat(api4com): provisionar e salvar tokens e ramais perpétuos para todos os 7 usuários",
-  "builtAt": "2026-11-05T23:50:31.612Z"
+  "commit": "a1c4ba7a6230c30372b29c681820a06bb390a854",
+  "shortCommit": "a1c4ba7",
+  "message": "fix(webphone): atualizar senhas SIP reais, evitar loop infinito e auto-conectar ao discar",
+  "builtAt": "2026-11-06T00:08:04.035Z"
 }

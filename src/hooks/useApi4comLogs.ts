@@ -1,0 +1,159 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+export interface Api4comLogItem {
+  id: string;
+  createdAt: string;
+  formattedDate: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number;
+  durationFormatted: string;
+  status: string;
+  hangupCause: string | null;
+  hangupCauseCode: string | null;
+  audioUrl: string | null;
+  externalCallId: string | null;
+  api4comMetadata: any;
+  operator?: {
+    id: string;
+    name: string;
+    extension: string | null;
+    sipDomain: string | null;
+  } | null;
+  lead?: {
+    id: string;
+    name: string | null;
+    phone: string | null;
+  } | null;
+  company?: {
+    id: string;
+    name: string;
+  } | null;
+  campaign?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return "0s";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins === 0) return `${secs}s`;
+  return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+}
+
+export function useApi4comLogs() {
+  const { data: logs = [], isLoading, refetch } = useQuery({
+    queryKey: ["api4com-logs"],
+    queryFn: async (): Promise<Api4comLogItem[]> => {
+      const { data, error } = await (supabase as any)
+        .from("call_logs")
+        .select(`
+          id,
+          created_at,
+          started_at,
+          ended_at,
+          duration_seconds,
+          call_status,
+          hangup_cause,
+          hangup_cause_code,
+          audio_url,
+          external_call_id,
+          api4com_metadata,
+          call_operators (
+            id,
+            operator_name,
+            extension,
+            sip_domain
+          ),
+          call_leads (
+            id,
+            name,
+            phone
+          ),
+          companies (
+            id,
+            name
+          ),
+          call_campaigns (
+            id,
+            name
+          )
+        `)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) {
+        console.error("Erro ao buscar logs da API4COM:", error);
+        throw error;
+      }
+
+      return (data || []).map((c: any): Api4comLogItem => {
+        const rawDate = c.created_at || c.started_at || new Date().toISOString();
+        let formattedDate = "-";
+        try {
+          formattedDate = new Date(rawDate).toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+        } catch {
+          formattedDate = rawDate;
+        }
+
+        const duration = Number(c.duration_seconds) || 0;
+
+        return {
+          id: c.id,
+          createdAt: c.created_at,
+          formattedDate,
+          startedAt: c.started_at,
+          endedAt: c.ended_at,
+          durationSeconds: duration,
+          durationFormatted: formatDuration(duration),
+          status: c.call_status || "dialing",
+          hangupCause: c.hangup_cause || null,
+          hangupCauseCode: c.hangup_cause_code ? String(c.hangup_cause_code) : null,
+          audioUrl: c.audio_url || null,
+          externalCallId: c.external_call_id || null,
+          api4comMetadata: c.api4com_metadata || null,
+          operator: c.call_operators
+            ? {
+                id: c.call_operators.id,
+                name: c.call_operators.operator_name || "Operador",
+                extension: c.call_operators.extension || null,
+                sipDomain: c.call_operators.sip_domain || null,
+              }
+            : null,
+          lead: c.call_leads
+            ? {
+                id: c.call_leads.id,
+                name: c.call_leads.name || null,
+                phone: c.call_leads.phone || null,
+              }
+            : null,
+          company: c.companies
+            ? {
+                id: c.companies.id,
+                name: c.companies.name,
+              }
+            : null,
+          campaign: c.call_campaigns
+            ? {
+                id: c.call_campaigns.id,
+                name: c.call_campaigns.name,
+              }
+            : null,
+        };
+      });
+    },
+    refetchInterval: 15_000,
+  });
+
+  return { logs, isLoading, refetch };
+}

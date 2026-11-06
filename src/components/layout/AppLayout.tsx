@@ -7,7 +7,6 @@ import { InstanceStatusBanner } from "./InstanceStatusBanner";
 import { ImpersonationBanner } from "../admin/ImpersonationBanner";
 import { useCallQueue } from "@/hooks/useCallQueue";
 import { ChatExpressDock } from "@/components/chat/express/ChatExpressDock";
-import { WebphoneDock } from "@/components/webphone/WebphoneDock";
 import { CallFloatingLauncher } from "@/components/call/CallFloatingLauncher";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { NotificationPopupManager } from "../notifications/NotificationPopupManager";
@@ -142,7 +141,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {!isQuizEditor && <CallFloatingLauncher />}
-        {!isQuizEditor && <WebphoneDock />}
         {!isQuizEditor && <ChatExpressDock />}
         {!isQuizEditor && <PwaInstallPrompt />}
         {!isQuizEditor && !chatKeyboardOpen && <MobileBottomNav />}

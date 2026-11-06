@@ -201,6 +201,8 @@ export function CallActionDialog({
   const [copied, setCopied] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(currentData.leadName);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [editPhone, setEditPhone] = useState(currentData.leadPhone);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
   const [executingActionId, setExecutingActionId] = useState<string | null>(null);
@@ -1084,7 +1086,109 @@ export function CallActionDialog({
     setIsDialing(true);
     setCurrentData(prev => ({ ...prev, callStatus: "dialing" }));
     try {
-      // Fetch webhook configs
+      const cleanPhone = currentData.leadPhone?.trim();
+      if (!cleanPhone) {
+        toast({ title: "Telefone não informado", description: "Informe o telefone para ligar.", variant: "destructive" });
+        setCurrentData(prev => ({ ...prev, callStatus: "idle" }));
+        setIsDialing(false);
+        return;
+      }
+
+      // 1. Verificar se o usuário / operador possui integração nativa API4COM
+      let operatorData: any = null;
+      if (user?.id) {
+        let opQuery = supabase
+          .from("call_operators")
+          .select("id, operator_name, extension, api4com_token, sip_domain")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+
+        if (activeCompanyId) {
+          opQuery = opQuery.eq("company_id", activeCompanyId);
+        }
+
+        const { data: opList } = await opQuery.limit(1);
+        operatorData = opList?.[0] || null;
+
+        if (!operatorData?.api4com_token) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("api4com_token, api4com_extension, api4com_domain")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (prof?.api4com_token) {
+            operatorData = {
+              id: operatorData?.id,
+              operator_name: user.email,
+              extension: prof.api4com_extension,
+              api4com_token: prof.api4com_token,
+              sip_domain: prof.api4com_domain,
+            };
+          }
+        }
+      }
+
+      // Se temos API4COM: Dispara chamada nativa diretamente na API4COM!
+      if (operatorData?.api4com_token && operatorData?.extension) {
+        if (isWorkflowCall && realTaskId) {
+          await supabase
+            .from("workflow_call_tasks")
+            .update({ status: "dialing", assigned_operator_id: user?.id })
+            .eq("id", realTaskId);
+          queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+        }
+
+        const { data: dialRes, error: dialErr } = await supabase.functions.invoke("api4com-call-dial", {
+          body: {
+            operator_id: operatorData.id,
+            user_id: user?.id,
+            phone: cleanPhone,
+            lead_id: currentData.leadId || null,
+            campaign_id: currentData.campaignId || null,
+          }
+        });
+
+        if (dialErr || !dialRes?.success) {
+          const msg = dialRes?.error || dialErr?.message || "Falha ao discar na API4COM";
+          toast({ title: "Erro na chamada", description: msg, variant: "destructive" });
+          setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
+          if (isWorkflowCall && realTaskId) {
+            await supabase.from("workflow_call_tasks").update({ status: "failed" }).eq("id", realTaskId);
+            queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+          }
+          setIsDialing(false);
+          return;
+        }
+
+        toast({
+          title: "Chamada iniciada!",
+          description: `Chamando ramal ${operatorData.extension}... Atenda para conectar com ${cleanPhone}.`,
+        });
+
+        setCurrentData(prev => ({
+          ...prev,
+          callStatus: "in_call",
+          externalCallId: dialRes.externalCallId,
+          callId: dialRes.callLogId || prev.callId,
+        }));
+
+        if (isWorkflowCall && realTaskId) {
+          await supabase
+            .from("workflow_call_tasks")
+            .update({
+              status: "in_call",
+              ...(dialRes.externalCallId ? { external_call_id: dialRes.externalCallId } : {}),
+            })
+            .eq("id", realTaskId);
+          queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+        }
+
+        setIsDialing(false);
+        return;
+      }
+
+      // 2. Fallback legado: Fetch webhook configs
       const targetUserId = currentData.userId || user?.id;
       let { data: configs } = await supabase
         .from("webhook_configs")
@@ -1364,23 +1468,57 @@ export function CallActionDialog({
                 </div>
               )}
 
-              {/* Phone with copy */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono mt-0.5">
-                <Phone className="h-3 w-3 text-slate-400 shrink-0" />
-                <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
-                  {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
-                </span>
-                {currentData.leadPhone && (
+              {/* Phone with copy & edit */}
+              {isEditingPhone ? (
+                <Input
+                  autoFocus
+                  placeholder="DDD + Telefone..."
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                    if (e.key === "Escape") { setEditPhone(currentData.leadPhone); setIsEditingPhone(false); }
+                  }}
+                  onBlur={async () => {
+                    const trimmed = editPhone.trim();
+                    if (trimmed && trimmed !== currentData.leadPhone) {
+                      if (currentData.leadId) {
+                        await (supabase as any).from("call_leads").update({ phone: trimmed }).eq("id", currentData.leadId);
+                      }
+                      setCurrentData(prev => ({ ...prev, leadPhone: trimmed }));
+                    } else {
+                      setEditPhone(currentData.leadPhone);
+                    }
+                    setIsEditingPhone(false);
+                  }}
+                  className="h-6 text-xs font-mono max-w-[190px] rounded-md border-primary/40 px-2 py-0"
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono mt-0.5">
+                  <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                  <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                    {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => copyExternalId(currentData.leadPhone)}
-                    className="text-slate-400 hover:text-foreground transition-colors p-0.5"
-                    title="Copiar telefone"
+                    onClick={() => { setEditPhone(currentData.leadPhone); setIsEditingPhone(true); }}
+                    className="text-slate-400 hover:text-primary transition-colors p-0.5 rounded shrink-0"
+                    title="Editar telefone do lead"
                   >
-                    {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+                    <Pencil className="h-2.5 w-2.5" />
                   </button>
-                )}
-              </div>
+                  {currentData.leadPhone && (
+                    <button
+                      type="button"
+                      onClick={() => copyExternalId(currentData.leadPhone)}
+                      className="text-slate-400 hover:text-foreground transition-colors p-0.5"
+                      title="Copiar telefone"
+                    >
+                      {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {forwardStack.length > 0 && (
@@ -1488,13 +1626,13 @@ export function CallActionDialog({
               Chat
             </Button>
 
-            {isWorkflowCall && (
+            {!["dialing", "ringing", "in_call", "on_call", "answered"].includes(currentData.callStatus || "") && (
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40"
+                className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40 shadow-2xs"
                 onClick={handleManualDial}
-                disabled={isDialing}
+                disabled={isDialing || !currentData.leadPhone}
               >
                 {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
                 Discar Agora
