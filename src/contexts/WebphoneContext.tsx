@@ -214,19 +214,24 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [operator?.extension]);
 
-  // Auto-conectar SIP em segundo plano quando credenciais estiverem prontas
-  useEffect(() => {
-    if (hasSipConfig && operator?.extension && status === "disconnected" && !isOnline) {
-      console.log("[Webphone] Auto-conectando SIP em segundo plano para ramal:", operator.extension);
-      connectSIP();
-    }
-  }, [hasSipConfig, operator?.extension, status, isOnline, connectSIP]);
 
   const claimPrimaryTab = useCallback(() => {
     if (channelRef.current) {
       channelRef.current.postMessage({ type: "CLAIM_PRIMARY_TAB" });
     }
     setIsPrimaryTab(true);
+  }, []);
+
+  const cleanupCall = useCallback(() => {
+    currentCallRef.current = null;
+    activeCallDataRef.current = null;
+    setActiveCall(null);
+    setIsMuted(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setStatus("connected");
   }, []);
 
   // 3. Inicializar e Conectar Webphone SIP
@@ -393,19 +398,8 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setIsOnline(false);
       setErrorMessage(err.message || "Erro ao conectar ao servidor SIP.");
     }
-  }, [hasSipConfig, operator, claimPrimaryTab]);
+  }, [hasSipConfig, operator, claimPrimaryTab, cleanupCall]);
 
-  const cleanupCall = useCallback(() => {
-    currentCallRef.current = null;
-    activeCallDataRef.current = null;
-    setActiveCall(null);
-    setIsMuted(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setStatus("connected");
-  }, []);
 
   const disconnectSIP = useCallback(() => {
     if (webphoneRef.current) {
@@ -443,6 +437,14 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     },
     [isOnline, connectSIP, disconnectSIP, toast]
   );
+
+  // Auto-conectar SIP em segundo plano quando credenciais estiverem prontas
+  useEffect(() => {
+    if (hasSipConfig && operator?.extension && status === "disconnected" && !isOnline) {
+      console.log("[Webphone] Auto-conectando SIP em segundo plano para ramal:", operator.extension);
+      connectSIP();
+    }
+  }, [hasSipConfig, operator?.extension, status, isOnline, connectSIP]);
 
   // 4. Iniciar Discagem (Click-to-Call)
   const dial = useCallback(

@@ -1,6 +1,6 @@
 {
-  "commit": "1245caec41676906269059d7d8460d16f9ca9b77",
-  "shortCommit": "1245cae",
-  "message": "feat(chat): add unpin/collapse toggle for quick replies sidebar",
-  "builtAt": "2026-11-06T17:39:20.724Z"
+  "commit": "aaecf5a94c92f1dceca33e19b03fb5802861453f",
+  "shortCommit": "aaecf5a",
+  "message": "fix(telephony): iniciar conexao UA SIP, auto-conectar webphone, resolver logs PGRST200 e tratar geracao de token",
+  "builtAt": "2026-11-06T17:57:30.913Z"
 }
