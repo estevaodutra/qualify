@@ -131,3 +131,40 @@ FOR EACH ROW EXECUTE FUNCTION public.crm_record_deal_journey();
 
 GRANT SELECT ON public.crm_journey_events TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.crm_journey_lines TO authenticated;
+
+-- Atomic, company-scoped replacement for the visual map configuration.
+CREATE OR REPLACE FUNCTION public.crm_save_journey_lines(p_company_id uuid, p_lines jsonb)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  item jsonb;
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.is_company_member(p_company_id, auth.uid()) THEN
+    RAISE EXCEPTION 'Not authorized to configure this company';
+  END IF;
+  IF jsonb_typeof(p_lines) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Lines must be an array';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_lines) l WHERE l->>'line_role' = 'main') THEN
+    RAISE EXCEPTION 'At least one main pipeline is required';
+  END IF;
+  IF (SELECT count(*) FROM jsonb_array_elements(p_lines)) >
+     (SELECT count(DISTINCT l->>'pipeline_id') FROM jsonb_array_elements(p_lines) l) THEN
+    RAISE EXCEPTION 'Duplicated pipeline in map';
+  END IF;
+  DELETE FROM public.crm_journey_lines WHERE company_id = p_company_id;
+  FOR item IN SELECT value FROM jsonb_array_elements(p_lines) LOOP
+    INSERT INTO public.crm_journey_lines
+      (company_id, pipeline_id, line_role, order_index, entry_stage_id, terminal_stage_id)
+    VALUES (
+      p_company_id,
+      (item->>'pipeline_id')::uuid,
+      item->>'line_role',
+      (item->>'order_index')::integer,
+      nullif(item->>'entry_stage_id', '')::uuid,
+      nullif(item->>'terminal_stage_id', '')::uuid
+    );
+  END LOOP;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.crm_save_journey_lines(uuid, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.crm_save_journey_lines(uuid, jsonb) TO authenticated;
