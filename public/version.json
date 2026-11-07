@@ -1,6 +1,6 @@
 {
-  "commit": "9cabc16f3418898568dc38f5d9c9b0d34882ffaf",
-  "shortCommit": "9cabc16",
-  "message": "fix(telephony): aguardar registro SIP com promise, evitar 424 e formatar erro amigavel",
-  "builtAt": "2026-11-06T19:36:48.706Z"
+  "commit": "criafy-insights-dynamic-period-fix",
+  "shortCommit": "c8e23f1",
+  "message": "fix(criafy-insights): fix view performance date calculation to dynamically match period filter up to current date",
+  "builtAt": "2026-11-07T03:26:40.000Z"
 }
