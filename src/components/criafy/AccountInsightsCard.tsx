@@ -591,10 +591,10 @@ export function AccountInsightsCard({
             </div>
           </div>
           <div className="font-extrabold text-sm sm:text-base tracking-tight truncate">
-            {formatNumber(kpis.views.value, true)}
+            {kpis.views.value.toLocaleString("pt-BR")}
           </div>
-          <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-            <span>↑ {kpis.views.changePct}%</span>
+          <div className={`text-[9px] font-bold flex items-center gap-0.5 ${kpis.views.changePct < 0 ? "text-rose-500 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+            <span>{kpis.views.changePct < 0 ? `↓ ${kpis.views.changePct}%` : `↑ +${kpis.views.changePct}%`}</span>
           </div>
         </div>
 
@@ -607,10 +607,10 @@ export function AccountInsightsCard({
             </div>
           </div>
           <div className="font-extrabold text-sm sm:text-base tracking-tight truncate">
-            +{formatNumber(kpis.netFollowers.value)}
+            {kpis.netFollowers.value >= 0 ? `+${formatNumber(kpis.netFollowers.value)}` : formatNumber(kpis.netFollowers.value)}
           </div>
-          <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-            <span>↑ {kpis.netFollowers.changePct}%</span>
+          <div className={`text-[9px] font-bold flex items-center gap-0.5 ${kpis.netFollowers.changePct < 0 ? "text-rose-500 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+            <span>{kpis.netFollowers.changePct < 0 ? `↓ ${kpis.netFollowers.changePct}%` : `↑ +${kpis.netFollowers.changePct}%`}</span>
           </div>
         </div>
 
@@ -696,8 +696,10 @@ export function AccountInsightsCard({
                   <HelpCircle className="w-3 h-3 text-muted-foreground/60 cursor-pointer" title="Evolução diária de visualizações e alcance gerado pelos conteúdos no Instagram" />
                 </div>
                 <div className="text-right">
-                  <span className="font-extrabold text-[11px]">{formatNumber(kpis.views.value, true)}</span>{" "}
-                  <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold">↑ {kpis.views.changePct}%</span>
+                  <span className="font-extrabold text-[11px]">{kpis.views.value.toLocaleString("pt-BR")}</span>{" "}
+                  <span className={`text-[9px] font-bold ${kpis.views.changePct < 0 ? "text-rose-500 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {kpis.views.changePct < 0 ? `↓ ${kpis.views.changePct}%` : `↑ +${kpis.views.changePct}%`}
+                  </span>
                 </div>
               </div>
 
