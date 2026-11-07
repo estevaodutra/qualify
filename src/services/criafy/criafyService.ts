@@ -997,27 +997,78 @@ export const criafyService = {
     };
   },
 
+  async getMediaInsights(accountId: string, mediaId: string, mediaType = "VIDEO"): Promise<{
+    reach: number;
+    views: number;
+    saved: number;
+    shares: number;
+    totalInteractions: number;
+    avgWatchTimeSeconds?: number;
+    newFollowers?: number;
+  }> {
+    try {
+      const { data: account } = await (supabase as any)
+        .from("criafy_instagram_accounts")
+        .select("access_token")
+        .eq("id", accountId)
+        .single();
+
+      const token = account?.access_token;
+      if (!token) {
+        return { reach: 0, views: 0, saved: 0, shares: 0, totalInteractions: 0 };
+      }
+
+      const isVideo = mediaType === "VIDEO";
+      const metricsParam = isVideo
+        ? "reach,saved,shares,total_interactions,plays,ig_reels_avg_watch_time"
+        : "reach,saved,shares,total_interactions";
+
+      const url = `https://graph.facebook.com/v22.0/${mediaId}/insights?metric=${metricsParam}&access_token=${token}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      let reach = 0;
+      let views = 0;
+      let saved = 0;
+      let shares = 0;
+      let totalInteractions = 0;
+      let avgWatchTimeSeconds: number | undefined = undefined;
+
+      if (data.data && Array.isArray(data.data)) {
+        data.data.forEach((metric: any) => {
+          const val = metric.values?.[0]?.value ?? 0;
+          if (metric.name === "reach") reach = val;
+          if (metric.name === "plays" || metric.name === "views") views = val;
+          if (metric.name === "saved") saved = val;
+          if (metric.name === "shares") shares = val;
+          if (metric.name === "total_interactions") totalInteractions = val;
+          if (metric.name === "ig_reels_avg_watch_time") {
+            avgWatchTimeSeconds = val > 100 ? Math.round((val / 1000) * 10) / 10 : Math.round(val * 10) / 10;
+          }
+        });
+      }
+
+      return { reach, views, saved, shares, totalInteractions, avgWatchTimeSeconds };
+    } catch (err) {
+      console.warn(`[criafyService] Erro ao buscar insights reais da mídia ${mediaId}:`, err);
+      return { reach: 0, views: 0, saved: 0, shares: 0, totalInteractions: 0 };
+    }
+  },
+
   enrichPostWithMetrics(post: InstagramPost, idx: number, account?: CriafyInstagramAccount): InstagramPost {
-    const isVideo = post.media_type === "VIDEO";
-    const isCarousel = post.media_type === "CAROUSEL_ALBUM";
-    const likes = Number(post.like_count ?? (110 + ((idx * 37) % 450)));
-    const comments = Number(post.comments_count ?? (8 + ((idx * 11) % 48)));
+    const likes = Number(post.like_count ?? 0);
+    const comments = Number(post.comments_count ?? 0);
     
-    // Métricas reais ou modeladas com precisão estatística da Meta Graph API
-    const saved = Math.max(5, Math.round(likes * (isCarousel ? 0.38 : isVideo ? 0.24 : 0.16)));
-    const shares = Math.max(3, Math.round(likes * (isVideo ? 0.32 : isCarousel ? 0.18 : 0.11)));
-    const views = isVideo
-      ? Math.round(likes * 8.8 + comments * 14 + (idx * 240))
-      : isCarousel
-      ? Math.round(likes * 4.6 + comments * 9)
-      : Math.round(likes * 3.4 + comments * 5);
-    const reach = Math.round(views * 0.82);
-    const newFollowers = Math.max(1, Math.round(reach * (isVideo ? 0.008 : isCarousel ? 0.005 : 0.002)));
-    const avgWatchTimeSeconds = isVideo
-      ? Math.round((12.5 + ((idx * 2.3) % 11.5)) * 10) / 10
-      : undefined;
-    const totalInteractions = likes + comments + saved + shares;
-    const engagementRate = Math.round(((totalInteractions / Math.max(reach, 1)) * 100) * 10) / 10;
+    // Usa exclusivamente métricas reais fornecidas pela Meta Graph API
+    const existing = post.metrics;
+    const reach = existing?.reach ?? 0;
+    const views = existing?.views ?? 0;
+    const saved = existing?.saved ?? 0;
+    const shares = existing?.shares ?? 0;
+    const avgWatchTimeSeconds = existing?.avgWatchTimeSeconds;
+    const newFollowers = existing?.newFollowers ?? 0;
+    const totalInteractions = existing?.totalInteractions ?? (likes + comments + saved + shares);
+    const engagementRate = reach > 0 ? Math.round(((totalInteractions / reach) * 100) * 10) / 10 : 0;
 
     return {
       ...post,
@@ -1188,9 +1239,46 @@ export const criafyService = {
       if (!feedResult.posts || feedResult.posts.length === 0) {
         feedResult = this.generateFallbackFeedWithInsights(account);
       } else {
-        feedResult.posts = feedResult.posts.map((post, idx) => {
-          return this.enrichPostWithMetrics(post, idx, account);
-        });
+        // Busca métricas REAIS oficiais da Meta para as postagens recentes
+        const token = account.access_token;
+        const enriched = await Promise.all(
+          feedResult.posts.slice(0, 20).map(async (post, idx) => {
+            try {
+              if (token) {
+                const realIns = await this.getMediaInsights(account.id, post.id, post.media_type);
+                const totalInter =
+                  realIns.totalInteractions ||
+                  (post.like_count || 0) + (post.comments_count || 0) + realIns.saved + realIns.shares;
+                const engRate =
+                  realIns.reach > 0 ? Math.round(((totalInter / realIns.reach) * 100) * 10) / 10 : 0;
+
+                return {
+                  ...post,
+                  metrics: {
+                    likes: post.like_count ?? 0,
+                    comments: post.comments_count ?? 0,
+                    reach: realIns.reach,
+                    views: realIns.views,
+                    saved: realIns.saved,
+                    shares: realIns.shares,
+                    totalInteractions: totalInter,
+                    avgWatchTimeSeconds: realIns.avgWatchTimeSeconds,
+                    newFollowers: realIns.newFollowers ?? 0,
+                    engagementRate: engRate,
+                  },
+                };
+              }
+            } catch (err) {
+              // fallback seguro sem simulações artificiais
+            }
+            return this.enrichPostWithMetrics(post, idx, account);
+          })
+        );
+
+        feedResult.posts = [
+          ...enriched,
+          ...feedResult.posts.slice(20).map((p, idx) => this.enrichPostWithMetrics(p, idx + 20, account)),
+        ];
       }
     } catch (feedErr) {
       console.warn("[criafyService] Erro ao buscar feed oficial da Meta, usando gerador de conteúdos com métricas:", feedErr);

@@ -128,6 +128,41 @@ export function AccountInsightsCard({
   const [contentSortBy, setContentSortBy] = useState<ContentSortOption>("ENGAGEMENT");
   const [contentViewMode, setContentViewMode] = useState<"GRID" | "TABLE">("GRID");
   const [selectedPostDetail, setSelectedPostDetail] = useState<InstagramPost | null>(null);
+  const [loadingDetailInsights, setLoadingDetailInsights] = useState(false);
+
+  const handleOpenPostDetail = async (post: InstagramPost) => {
+    setSelectedPostDetail(post);
+    setLoadingDetailInsights(true);
+    try {
+      const real = await criafyService.getMediaInsights(account.id, post.id, post.media_type);
+      setSelectedPostDetail((prev) => {
+        if (!prev || prev.id !== post.id) return prev;
+        const totalInter =
+          real.totalInteractions ||
+          (prev.like_count || 0) + (prev.comments_count || 0) + real.saved + real.shares;
+        const engRate = real.reach > 0 ? Math.round(((totalInter / real.reach) * 100) * 10) / 10 : 0;
+        return {
+          ...prev,
+          metrics: {
+            ...prev.metrics,
+            likes: prev.like_count || 0,
+            comments: prev.comments_count || 0,
+            reach: real.reach,
+            views: real.views,
+            saved: real.saved,
+            shares: real.shares,
+            avgWatchTimeSeconds: real.avgWatchTimeSeconds,
+            totalInteractions: totalInter,
+            engagementRate: engRate,
+          },
+        };
+      });
+    } catch (err) {
+      console.warn("Erro ao buscar métricas reais do post:", err);
+    } finally {
+      setLoadingDetailInsights(false);
+    }
+  };
 
   useEffect(() => {
     if (initialTab) {
@@ -1203,7 +1238,7 @@ export function AccountInsightsCard({
 
                     {/* Mídia do Post (Thumbnail / Player Preview) */}
                     <div
-                      onClick={() => setSelectedPostDetail(post)}
+                      onClick={() => handleOpenPostDetail(post)}
                       className="relative aspect-video sm:aspect-square mx-2 rounded-xl overflow-hidden bg-muted/60 cursor-pointer"
                     >
                       <img
@@ -1315,7 +1350,7 @@ export function AccountInsightsCard({
                       {/* Botão de Ver Detalhes */}
                       <button
                         type="button"
-                        onClick={() => setSelectedPostDetail(post)}
+                        onClick={() => handleOpenPostDetail(post)}
                         className="w-full py-1 text-center text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md transition-colors cursor-pointer"
                       >
                         Ver Detalhes do Conteúdo →
@@ -1424,7 +1459,7 @@ export function AccountInsightsCard({
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setSelectedPostDetail(post)}
+                            onClick={() => handleOpenPostDetail(post)}
                             className="h-7 px-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
                           >
                             Ver
@@ -1647,9 +1682,16 @@ export function AccountInsightsCard({
 
               {/* Grade Detalhada de Métricas da Meta */}
               <div className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                  Todas as Métricas Oficiais da Meta
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Todas as Métricas Oficiais da Meta
+                  </span>
+                  {loadingDetailInsights && (
+                    <Badge variant="outline" className="text-[9px] text-pink-600 border-pink-500/30 animate-pulse flex items-center gap-1">
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Sincronizando com a Meta...
+                    </Badge>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20">

@@ -1,6 +1,6 @@
 {
-  "commit": "criafy-insights-dynamic-period-fix",
-  "shortCommit": "c8e23f1",
-  "message": "fix(criafy-insights): fix view performance date calculation to dynamically match period filter up to current date",
-  "builtAt": "2026-11-07T03:26:40.000Z"
+  "commit": "criafy-real-media-insights-meta-sync",
+  "shortCommit": "38f1a09",
+  "message": "fix(criafy-insights): fetch real Meta Graph API media insights instead of synthetic formulas",
+  "builtAt": "2026-11-07T03:52:15.000Z"
 }
