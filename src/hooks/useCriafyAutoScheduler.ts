@@ -11,13 +11,31 @@ export function useCriafyAutoScheduler(
   onPublicationsChanged?: () => void
 ) {
   const isRunningRef = useRef(false);
+  const lastMetricsCheckRef = useRef<number>(0);
+
+  const checkMetricsSync = async () => {
+    if (!companyId) return;
+    const now = Date.now();
+    // Checa no máximo uma vez a cada 15 minutos pelo client
+    if (now - lastMetricsCheckRef.current < 15 * 60 * 1000) return;
+    lastMetricsCheckRef.current = now;
+
+    try {
+      await fetch("/api/criafy-metrics-sync-cron", { method: "POST" });
+    } catch {
+      // Ignora silenciosamente se o endpoint não estiver acessível em dev
+    }
+  };
 
   const checkAndPublishDue = async () => {
     if (!companyId || isRunningRef.current) return;
     isRunningRef.current = true;
 
     try {
-      // 1. Tenta acionar o worker de scheduler da Vercel
+      // 1. Tenta sincronizar métricas se tiver passado tempo
+      checkMetricsSync().catch(() => {});
+
+      // 2. Tenta acionar o worker de scheduler da Vercel
       const res = await fetch("/api/criafy-scheduler-worker", { method: "POST" });
       if (res.ok) {
         const data = await res.json();

@@ -3,6 +3,10 @@
     {
       "path": "/api/criafy-scheduler-worker",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/criafy-metrics-sync-cron",
+      "schedule": "0 * * * *"
     }
   ],
   "rewrites": [

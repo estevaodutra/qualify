@@ -15,7 +15,7 @@ export interface CardMentionNotificationParams {
 }
 
 export interface ParsedNotificationTarget {
-  type: "sprint_card" | "criafy_publication" | "external" | "unknown";
+  type: "sprint_card" | "criafy_publication" | "criafy_metrics" | "external" | "unknown";
   boardId?: string;
   cardId?: string;
   url?: string;
@@ -49,6 +49,13 @@ export function parseNotificationTarget(
       boardId,
       cardId,
       url: `/sprint/b/${boardId}?cardId=${cardId}`,
+    };
+  }
+
+  if (entity && entity.startsWith("criafy_metrics:")) {
+    return {
+      type: "criafy_metrics",
+      url: link || "/criafy?tab=insights",
     };
   }
 

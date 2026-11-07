@@ -274,7 +274,8 @@ export const NotificationPopupManager: React.FC = () => {
   const latestPopup = popups[0];
 
   const isCriafy =
-    latestPopup.entity?.startsWith("criafy_publication") ||
+    latestPopup.entity?.startsWith("criafy") ||
+    latestPopup.link?.includes("/criafy") ||
     latestPopup.title?.toLowerCase().includes("instagram") ||
     latestPopup.title?.toLowerCase().includes("criafy") ||
     latestPopup.title?.toLowerCase().includes("reels") ||
@@ -284,8 +285,16 @@ export const NotificationPopupManager: React.FC = () => {
   let bodyText = "";
 
   if (isCriafy) {
-    popupHeader = "Criafy • Publicação";
-    bodyText = `${latestPopup.title}. ${latestPopup.description || ""}`.trim();
+    if (
+      latestPopup.entity?.startsWith("criafy_metrics") ||
+      latestPopup.title?.toLowerCase().includes("métrica")
+    ) {
+      popupHeader = "Criafy • Métricas Atualizadas";
+      bodyText = latestPopup.description || latestPopup.title;
+    } else {
+      popupHeader = "Criafy • Publicação";
+      bodyText = `${latestPopup.title}. ${latestPopup.description || ""}`.trim();
+    }
   } else {
     const author = latestPopup.authorName || "Um membro";
     const cardName = latestPopup.cardTitle || (latestPopup.title.match(/card\s+["']?([^"']+)["']?/i)?.[1]) || "Card";

@@ -69,11 +69,46 @@ export default async function handler(req, res) {
       }
     }
 
+    // 3. Redundancy: Check if any connected Instagram account has insights older than 60 min
+    let triggeredMetricsSync = false;
+    try {
+      const accUrl = `${SUPABASE_URL}/rest/v1/criafy_instagram_accounts?connection_status=eq.CONNECTED&select=id,metadata&limit=10`;
+      const accRes = await fetch(accUrl, {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      });
+      if (accRes.ok) {
+        const accs = await accRes.json();
+        const hasStaleAccount = (accs || []).some((a) => {
+          const last = a.metadata?.insights_synced_at;
+          if (!last) return true;
+          const diffMs = Date.now() - new Date(last).getTime();
+          return diffMs > 60 * 60 * 1000;
+        });
+
+        if (hasStaleAccount) {
+          triggeredMetricsSync = true;
+          const host = req.headers?.["host"] || "qualifys.app";
+          const proto = host.includes("localhost") ? "http" : "https";
+          // Trigger hourly sync cron in background
+          fetch(`${proto}://${host}/api/criafy-metrics-sync-cron`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          }).catch((e) => console.warn("Failed to trigger criafy-metrics-sync-cron from scheduler:", e.message));
+        }
+      }
+    } catch (staleErr) {
+      console.warn("Error checking stale accounts in scheduler:", staleErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       timestamp: nowIso,
       checkedCount: pendingPubs.length,
       publishedCount: results.filter((r) => r.success).length,
+      triggeredMetricsSync,
       results,
     });
   } catch (err) {
