@@ -1,6 +1,6 @@
 {
-  "commit": "8837efbd07ee3fef348cd29868aff6c80bd2b89e",
-  "shortCommit": "8837efb",
-  "message": "fix(webphone): resolver erro de inicializacao ReferenceError reordenando declaracoes no WebphoneContext",
-  "builtAt": "2026-11-06T18:13:41.949Z"
+  "commit": "9cabc16f3418898568dc38f5d9c9b0d34882ffaf",
+  "shortCommit": "9cabc16",
+  "message": "fix(telephony): aguardar registro SIP com promise, evitar 424 e formatar erro amigavel",
+  "builtAt": "2026-11-06T19:36:48.706Z"
 }

@@ -248,11 +248,13 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return new Promise<boolean>(async (resolve) => {
       let settled = false;
       let registrationTimeout: any = null;
+      let regCheckInterval: any = null;
 
       const settle = (ok: boolean) => {
         if (!settled) {
           settled = true;
           if (registrationTimeout) clearTimeout(registrationTimeout);
+          if (regCheckInterval) clearInterval(regCheckInterval);
           resolve(ok);
         }
       };
@@ -340,18 +342,46 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           settle(false);
         };
 
-        // Registrar listeners tanto no wp quanto no userAgent
+        // Registrar listeners para todos os nomes de eventos possíveis do libwebphone
+        wp.on("userAgent.registration.registered", onRegistered);
+        wp.on("registration.registered", onRegistered);
         wp.on("userAgent.registered", onRegistered);
         wp.on("registered", onRegistered);
         ua?.on?.("registered", onRegistered);
 
+        wp.on("userAgent.registration.unregistered", onUnregistered);
+        wp.on("registration.unregistered", onUnregistered);
         wp.on("userAgent.unregistered", onUnregistered);
         wp.on("unregistered", onUnregistered);
         ua?.on?.("unregistered", onUnregistered);
 
+        wp.on("userAgent.registration.failed", onRegistrationFailed);
+        wp.on("registration.failed", onRegistrationFailed);
         wp.on("userAgent.registrationFailed", onRegistrationFailed);
         wp.on("registrationFailed", onRegistrationFailed);
         ua?.on?.("registrationFailed", onRegistrationFailed);
+
+        wp.onAny?.((evt: string, ...args: any[]) => {
+          console.log(`[Webphone Event] ${evt}`, args);
+          if (evt.includes("registered") || evt.includes("registration.registered")) {
+            onRegistered();
+          } else if (evt.includes("registration.failed")) {
+            onRegistrationFailed(args);
+          } else if (evt.includes("registration.unregistered")) {
+            onUnregistered();
+          }
+        });
+
+        // Polling ativo a cada 200ms para confirmar registro SIP mesmo se o evento falhar
+        regCheckInterval = setInterval(() => {
+          try {
+            if (ua?.isRegistered?.()) {
+              console.log("[Webphone] ua.isRegistered() retornou true via polling!");
+              clearInterval(regCheckInterval);
+              onRegistered();
+            }
+          } catch {}
+        }, 200);
 
         // INICIAR REGISTRO SIP NO WEBSOCKET
         try {
