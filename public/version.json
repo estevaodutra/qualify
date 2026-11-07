@@ -1,6 +1,6 @@
 {
-  "commit": "criafy-real-media-insights-meta-sync",
-  "shortCommit": "38f1a09",
+  "commit": "3bed419263bc2f27358aa293a435973eefe46d4a",
+  "shortCommit": "3bed419",
   "message": "fix(criafy-insights): fetch real Meta Graph API media insights instead of synthetic formulas",
-  "builtAt": "2026-11-07T03:52:15.000Z"
+  "builtAt": "2026-11-07T04:10:41.342Z"
 }
