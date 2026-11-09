@@ -153,15 +153,6 @@ export function CustomFieldsTab() {
     }
   };
 
-  const populateDefaultFields = async () => {
-    if (!activeCompany?.id) return;
-    try {
-      await (supabase as any).rpc("seed_crm_system_fields", { p_company_id: activeCompany.id });
-      await fetchFields();
-    } catch (err) {
-      console.error("Error seeding CRM system fields:", err);
-    }
-  };
 
   useEffect(() => {
     fetchFields();
