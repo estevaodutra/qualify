@@ -26,7 +26,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
     {
       title: "CRM",
       items: [
-        { title: "Campos Adicionais", url: "/settings/custom-fields", icon: Sliders },
+        { title: "Campos do CRM", url: "/settings/custom-fields", icon: Sliders },
         { title: "Tags", url: "/settings/tags", icon: Tag },
         { title: "Limpeza de Audiência", url: "/settings/cleanup", icon: Trash2 },
       ],
