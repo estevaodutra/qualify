@@ -35,6 +35,10 @@ export interface CustomFieldMetadata {
   group_name: string | null;
   is_visible: boolean;
   is_private: boolean;
+  is_system?: boolean;
+  source_column?: string | null;
+  is_required?: boolean;
+  order_index?: number;
   options?: CustomFieldOption[] | string[] | null;
   created_at?: string;
 }
@@ -52,6 +56,7 @@ const FIELD_TYPES = [
   { value: "phone", label: "Telefone", icon: Phone },
   { value: "email", label: "E-mail", icon: Mail },
   { value: "url", label: "URL / Link", icon: LinkIcon },
+  { value: "relation", label: "Relacionamento", icon: LinkIcon },
 ];
 
 export function CustomFieldsTab() {
@@ -79,6 +84,7 @@ export function CustomFieldsTab() {
   const [groupName, setGroupName] = useState("Sem grupo");
   const [isVisible, setIsVisible] = useState(true);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [isRequired, setIsRequired] = useState(false);
   const [options, setOptions] = useState<CustomFieldOption[]>([]);
   const [newOptionLabel, setNewOptionLabel] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -105,12 +111,23 @@ export function CustomFieldsTab() {
         .from("custom_fields_metadata")
         .select("*, custom_field_options(*)")
         .eq("company_id", activeCompany.id)
+        .order("order_index", { ascending: true })
         .order("created_at", { ascending: true });
 
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        await populateDefaultFields();
+        try {
+          await (supabase as any).rpc("seed_crm_system_fields", { p_company_id: activeCompany.id });
+          const { data: seeded } = await supabase
+            .from("custom_fields_metadata")
+            .select("*, custom_field_options(*)")
+            .eq("company_id", activeCompany.id)
+            .order("order_index", { ascending: true });
+          setFields((seeded || []) as CustomFieldMetadata[]);
+        } catch {
+          setFields([]);
+        }
       } else {
         const normalized = data.map((f: any) => {
           let fieldOpts = f.options;
@@ -139,73 +156,10 @@ export function CustomFieldsTab() {
   const populateDefaultFields = async () => {
     if (!activeCompany?.id) return;
     try {
-      const defaults = [
-        {
-          company_id: activeCompany.id,
-          category: "lead" as const,
-          name: "Tipo de Projeto",
-          key: "tipo_de_projeto",
-          description: "Tipo de projeto de marketing contratado pelo lead",
-          type: "select",
-          group_name: "Qualificação",
-          is_visible: true,
-          is_private: false,
-        },
-        {
-          company_id: activeCompany.id,
-          category: "lead" as const,
-          name: "Orçamento Mensal",
-          key: "orcamento_mensal",
-          description: "Orçamento estimado de mídia mensal",
-          type: "currency",
-          group_name: "Qualificação",
-          is_visible: true,
-          is_private: false,
-        },
-        {
-          company_id: activeCompany.id,
-          category: "deal" as const,
-          name: "Faturamento Esperado",
-          key: "faturamento_esperado",
-          description: "Faturamento esperado do contrato fechado",
-          type: "currency",
-          group_name: "Negócios",
-          is_visible: true,
-          is_private: false,
-        },
-        {
-          company_id: activeCompany.id,
-          category: "lead" as const,
-          name: "Empresa",
-          key: "empresa",
-          description: "Nome da empresa contratante",
-          type: "text",
-          group_name: "Dados Gerais",
-          is_visible: true,
-          is_private: false,
-        },
-      ];
-
-      const { data: inserted, error } = await supabase
-        .from("custom_fields_metadata")
-        .insert(defaults)
-        .select();
-
-      if (error) throw error;
-
-      // Insert default options for Tipo de Projeto
-      const tipoProjetoField = inserted?.find(f => f.key === "tipo_de_projeto");
-      if (tipoProjetoField) {
-        await supabase.from("custom_field_options").insert([
-          { field_id: tipoProjetoField.id, label: "Performance / Tráfego", value: "performance", order_index: 0 },
-          { field_id: tipoProjetoField.id, label: "Inbound Marketing", value: "inbound", order_index: 1 },
-          { field_id: tipoProjetoField.id, label: "Branding / Design", value: "branding", order_index: 2 },
-        ]);
-      }
-
-      fetchFields();
-    } catch (err: any) {
-      console.error("Error creating default fields:", err);
+      await (supabase as any).rpc("seed_crm_system_fields", { p_company_id: activeCompany.id });
+      await fetchFields();
+    } catch (err) {
+      console.error("Error seeding CRM system fields:", err);
     }
   };
 
@@ -224,6 +178,7 @@ export function CustomFieldsTab() {
     setGroupName("Qualificação");
     setIsVisible(true);
     setIsPrivate(false);
+    setIsRequired(false);
     setOptions([]);
     setNewOptionLabel("");
     setIsOpen(true);
@@ -240,6 +195,7 @@ export function CustomFieldsTab() {
     setGroupName(field.group_name || "Sem grupo");
     setIsVisible(field.is_visible);
     setIsPrivate(field.is_private);
+    setIsRequired(Boolean(field.is_required));
 
     // Normalize options
     if (Array.isArray(field.options)) {
@@ -297,17 +253,27 @@ export function CustomFieldsTab() {
 
     setIsSubmitting(true);
     try {
-      const fieldData = {
-        company_id: activeCompany.id,
-        name: name.trim(),
-        key: key.trim(),
-        description: description.trim() || null,
-        type,
-        category,
-        group_name: groupName.trim() || "Sem grupo",
-        is_visible: isVisible,
-        is_private: isPrivate,
-      };
+      const editingField = fields.find((f) => f.id === currentFieldId);
+      const fieldData = editingField?.is_system
+        ? {
+            group_name: groupName.trim() || "Sem grupo",
+            is_visible: isVisible,
+            is_private: isPrivate,
+            is_required: isRequired,
+          }
+        : {
+            company_id: activeCompany.id,
+            name: name.trim(),
+            key: key.trim(),
+            description: description.trim() || null,
+            type,
+            category,
+            group_name: groupName.trim() || "Sem grupo",
+            is_visible: isVisible,
+            is_private: isPrivate,
+            is_required: isRequired,
+            is_system: false,
+          };
 
       let savedFieldId = currentFieldId;
 
@@ -328,7 +294,8 @@ export function CustomFieldsTab() {
       }
 
       // Sync options if select or multi_select
-      if (savedFieldId) {
+      const savedField = fields.find((f) => f.id === savedFieldId);
+      if (savedFieldId && !savedField?.is_system) {
         await supabase
           .from("custom_field_options")
           .delete()
@@ -368,6 +335,14 @@ export function CustomFieldsTab() {
   };
 
   const handleDelete = async (id: string) => {
+    const field = fields.find((f) => f.id === id);
+    if (field?.is_system) {
+      toast({
+        title: "Campo padrão do sistema",
+        description: "Campos padrão não podem ser excluídos. Você pode ocultá-los ou reorganizá-los.",
+      });
+      return;
+    }
     if (!confirm("Tem certeza que deseja excluir este campo personalizado? O histórico não será apagado, mas a referência será removida.")) return;
 
     try {
@@ -457,6 +432,9 @@ export function CustomFieldsTab() {
       if (!groups[group]) groups[group] = [];
       groups[group].push(field);
     });
+    Object.values(groups).forEach((items) =>
+      items.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+    );
     return groups;
   }, [filteredFields]);
 
@@ -466,7 +444,7 @@ export function CustomFieldsTab() {
   };
 
   const getCategoryBadge = (cat: string) => {
-    if (cat === "lead") return <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-[10px]">Lead</Badge>;
+    if (cat === "lead") return <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-[10px]">Lead / Pessoa</Badge>;
     if (cat === "deal") return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Negócio</Badge>;
     return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">Empresa</Badge>;
   };
@@ -479,20 +457,40 @@ export function CustomFieldsTab() {
           <div>
             <CardTitle className="text-xl flex items-center gap-2.5 font-extrabold">
               <Sliders className="h-5 w-5 text-primary" />
-              Gestão de Campos Adicionais
+              Gestão de Campos do CRM
             </CardTitle>
             <CardDescription className="text-xs mt-1">
-              Crie e gerencie campos personalizados estruturados reutilizados em Leads, Negócios, Workflows e integrações.
+              Gerencie os campos padrão e personalizados de Lead/Pessoa, Empresa e Negócio, reutilizados no CRM, Workflows e integrações.
             </CardDescription>
           </div>
           <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-2 rounded-xl px-5 py-2.5 shadow-lg shadow-primary/20 shrink-0 transition-all">
             <Plus className="h-4.5 w-4.5" />
-            + Novo Campo
+            + Novo Campo Personalizado
           </Button>
         </div>
 
+        <div className="flex flex-wrap gap-2 pt-1">
+          {[
+            { value: "all", label: "Todos" },
+            { value: "lead", label: "Lead / Pessoa" },
+            { value: "company", label: "Empresa" },
+            { value: "deal", label: "Negócio" },
+          ].map((item) => (
+            <Button
+              key={item.value}
+              type="button"
+              size="sm"
+              variant={categoryFilter === item.value ? "default" : "outline"}
+              onClick={() => setCategoryFilter(item.value as any)}
+              className="rounded-xl text-xs"
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+
         {/* Search & Filter Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -503,19 +501,6 @@ export function CustomFieldsTab() {
               className="pl-9 h-10 text-xs rounded-xl border-border/40 bg-background/40"
             />
           </div>
-
-          {/* Entidade Filter */}
-          <Select value={categoryFilter} onValueChange={(val: any) => setCategoryFilter(val)}>
-            <SelectTrigger className="h-10 text-xs rounded-xl border-border/40 bg-background/40">
-              <SelectValue placeholder="Todas as Entidades" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="all">Todas as Entidades</SelectItem>
-              <SelectItem value="lead">Entidade: Lead</SelectItem>
-              <SelectItem value="deal">Entidade: Negócio</SelectItem>
-              <SelectItem value="company">Entidade: Empresa</SelectItem>
-            </SelectContent>
-          </Select>
 
           {/* Status Filter */}
           <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
@@ -535,14 +520,14 @@ export function CustomFieldsTab() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16 space-y-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Carregando campos personalizados...</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Carregando campos do CRM...</p>
           </div>
         ) : Object.keys(groupedFields).length === 0 ? (
           <div className="text-center py-16 border-2 border-dashed border-border/40 rounded-2xl bg-muted/10">
             <HelpCircle className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-foreground mb-1">Nenhum campo adicional encontrado</h3>
+            <h3 className="text-base font-bold text-foreground mb-1">Nenhum campo encontrado</h3>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-5">
-              Crie campos personalizados para enriquecer as informações dos seus Leads e Negócios.
+              Os campos padrão do CRM serão criados automaticamente. Você também pode adicionar campos personalizados.
             </p>
             <Button onClick={handleOpenCreate} variant="outline" className="rounded-xl font-semibold border-border/40">
               Criar Primeiro Campo
@@ -573,8 +558,13 @@ export function CustomFieldsTab() {
                           <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-2.5 flex-wrap">
                               <span className="font-bold text-sm text-foreground">{field.name}</span>
+                              {field.is_system && (
+                                <Badge variant="outline" className="text-[9px] gap-1 border-muted-foreground/20">
+                                  <Lock className="h-2.5 w-2.5" /> Padrão
+                                </Badge>
+                              )}
                               <span className="text-[11px] font-mono text-muted-foreground/70 bg-muted/40 px-2 py-0.5 rounded-md">
-                                {`{{${field.key}}}`}
+                                {`{{${field.category === "lead" ? "lead" : field.category === "company" ? "company" : "deal"}.${field.key}}}`}
                               </span>
                               {getCategoryBadge(field.category)}
                               <Badge variant="outline" className="text-[10px] font-semibold text-muted-foreground">
@@ -636,8 +626,15 @@ export function CustomFieldsTab() {
                             <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground" onClick={() => handleOpenEdit(field)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(field.id)}>
-                              <Trash2 className="h-4 w-4" />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={Boolean(field.is_system)}
+                              title={field.is_system ? "Campo padrão do sistema" : "Excluir campo"}
+                              className="h-9 w-9 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10 disabled:opacity-25"
+                              onClick={() => handleDelete(field.id)}
+                            >
+                              {field.is_system ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                             </Button>
                           </div>
                         </div>
@@ -657,10 +654,10 @@ export function CustomFieldsTab() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 text-lg font-bold">
               <Settings2 className="h-5 w-5 text-primary" />
-              {isEditing ? "Editar Campo Adicional" : "Novo Campo Adicional"}
+              {isEditing ? "Editar Campo" : "Novo Campo Personalizado"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Defina a estrutura e o tipo de dado para este campo personalizado do CRM.
+              Configure o campo do CRM. Campos padrão têm identidade e tipo protegidos; campos personalizados são totalmente configuráveis.
             </DialogDescription>
           </DialogHeader>
 
@@ -671,6 +668,7 @@ export function CustomFieldsTab() {
                 placeholder="Ex: Faturamento Mensal, Setor..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={Boolean(fields.find((f) => f.id === currentFieldId)?.is_system)}
                 className="rounded-xl border-border/40 bg-background/50 text-sm"
               />
             </div>
@@ -681,7 +679,7 @@ export function CustomFieldsTab() {
                 placeholder="Ex: faturamento_mensal"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                disabled={isEditing}
+                disabled={isEditing || Boolean(fields.find((f) => f.id === currentFieldId)?.is_system)}
                 className="font-mono text-xs rounded-xl border-border/40 bg-background/50"
               />
               <p className="text-[10px] text-muted-foreground">Chave imutável para referenciar em Workflows, Condições e APIs (`{`{{${key || "variavel"}}}`}`).</p>
@@ -690,7 +688,7 @@ export function CustomFieldsTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Entidade</Label>
-                <Select value={category} onValueChange={(val: any) => setCategory(val)}>
+                <Select value={category} onValueChange={(val: any) => setCategory(val)} disabled={Boolean(fields.find((f) => f.id === currentFieldId)?.is_system)}>
                   <SelectTrigger className="rounded-xl border-border/40 bg-background/50 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -704,7 +702,7 @@ export function CustomFieldsTab() {
 
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tipo de Dado</Label>
-                <Select value={type} onValueChange={(val: any) => setType(val)}>
+                <Select value={type} onValueChange={(val: any) => setType(val)} disabled={Boolean(fields.find((f) => f.id === currentFieldId)?.is_system)}>
                   <SelectTrigger className="rounded-xl border-border/40 bg-background/50 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -730,6 +728,14 @@ export function CustomFieldsTab() {
                 onChange={(e) => setGroupName(e.target.value)}
                 className="rounded-xl border-border/40 bg-background/50 text-xs"
               />
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-border/40 bg-background/30 p-3">
+              <div>
+                <Label className="text-xs font-bold">Campo obrigatório</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Define se o campo deve ser exigido nos formulários compatíveis.</p>
+              </div>
+              <Switch checked={isRequired} onCheckedChange={setIsRequired} />
             </div>
 
             {/* Options Manager for Select / Multi-Select */}
