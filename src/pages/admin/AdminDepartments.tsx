@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDepartments, useDepartmentMembers } from "@/hooks/useDepartments";
-import { useAdmin } from "@/hooks/useAdmin";
+import { useAdminUsers, useAdminCompanies } from "@/hooks/useAdmin";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 export default function AdminDepartments() {
   const { toast } = useToast();
   const { departments, isLoading, createDepartment, updateDepartment, deleteDepartment } = useDepartments();
-  const { users = [], companies = [] } = useAdmin();
+  const { data: users = [] } = useAdminUsers();
+  const { data: companies = [] } = useAdminCompanies();
 
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
