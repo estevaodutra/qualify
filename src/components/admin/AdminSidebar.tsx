@@ -85,6 +85,7 @@ const sections: NavSection[] = [
     items: [
       { title: "Empresas", url: "/admin/empresas", icon: Building2 },
       { title: "Usuários", url: "/admin/usuarios", icon: Users },
+      { title: "Departamentos", url: "/admin/departamentos", icon: Layers },
       { title: "Planos & Assinaturas", url: "/admin/planos", icon: CreditCard },
       { title: "Permissões", url: "/admin/permissoes", icon: ShieldCheck },
       { title: "Uso & Limites", url: "/admin/uso", icon: Gauge },

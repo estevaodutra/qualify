@@ -77,6 +77,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCompanies from "./pages/admin/AdminCompanies";
 import AdminCompanyDetail from "./pages/admin/AdminCompanyDetail";
 import AdminUsers from "./pages/admin/AdminUsers";
+import AdminDepartments from "./pages/admin/AdminDepartments";
 import AdminPlans from "./pages/admin/AdminPlans";
 import { AdminPlansLayout } from "./components/admin/plans/AdminPlansLayout";
 import AdminPlanOverview from "./pages/admin/plans/AdminPlanOverview";
@@ -315,6 +316,7 @@ const App = () => {
                       <Route path="empresas" element={<AdminCompanies />} />
                       <Route path="empresas/:id" element={<AdminCompanyDetail />} />
                       <Route path="usuarios" element={<AdminUsers />} />
+                      <Route path="departamentos" element={<AdminDepartments />} />
                       {/* Sub-módulo Planos & Assinaturas com Subsidebar Contextual */}
                       <Route path="planos" element={<AdminPlansLayout />}>
                         <Route index element={<AdminPlanOverview />} />

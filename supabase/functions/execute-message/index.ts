@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 import { logNodeExecution } from "../_shared/workflow-execution-log.ts";
+import { dispatchWebPushNotification } from "../_shared/push-dispatcher.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -3108,6 +3109,230 @@ Deno.serve(async (req) => {
           });
 
           // Segue para a próxima conexão configurada
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
+        // ============= NOTIFICATION NODE (Nó de Notificações) =============
+        if (node.node_type === "notification") {
+          const nodeConfig = node.config || {};
+          const recipientType = (nodeConfig.recipientType as string) || "all";
+          const targetDeptId = (nodeConfig.departmentId as string) || null;
+          const targetUserId = (nodeConfig.userId as string) || null;
+          const rawTitle = (nodeConfig.title as string) || "Notificação de Workflow";
+          const rawMessage = (nodeConfig.message as string) || "Um lead foi processado na automação.";
+          const openChatOnClick = (nodeConfig.openChatOnClick as boolean) ?? true;
+          const companyId = typedCampaign.company_id || triggerContext?.companyId;
+
+          console.log(`[ExecuteMessage] 🔔 Executando nó de notificação para company ${companyId}, destinatário: ${recipientType}`);
+
+          const notifyResults: Array<{ destPhone: string; success: boolean; deliveredUsers: string[]; error?: string }> = [];
+
+          for (const dest of activeDestinations) {
+            const rawPhone = triggerContext?.respondentPhone || (dest.isPrivate ? dest.group_jid.split("@")[0] : "");
+            const phoneClean = rawPhone ? rawPhone.replace(/D/g, "") : dest.group_jid.split("@")[0].replace(/D/g, "");
+
+            try {
+              // 1. Obter dados do lead para interpolação
+              let leadInfo: any = null;
+              if (phoneClean && companyId) {
+                const { data: leadData } = await supabase
+                  .from("leads")
+                  .select("id, name, phone, email, assigned_to, company_id, tags")
+                  .eq("company_id", companyId)
+                  .or(`phone.ilike.%${phoneClean}%,phone.eq.${phoneClean}`)
+                  .order("updated_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                leadInfo = leadData;
+              }
+
+              // Se não achou por telefone, tenta pelo leadId do context
+              if (!leadInfo && triggerContext?.leadId) {
+                const { data: leadById } = await supabase
+                  .from("leads")
+                  .select("id, name, phone, email, assigned_to, company_id, tags")
+                  .eq("id", triggerContext.leadId)
+                  .maybeSingle();
+                leadInfo = leadById;
+              }
+
+              const leadName = leadInfo?.name || triggerContext?.respondentName || dest.group_name || phoneClean || "Lead";
+              const leadPhone = leadInfo?.phone || phoneClean || "";
+              const leadEmail = leadInfo?.email || "";
+              const leadId = leadInfo?.id || triggerContext?.leadId || null;
+
+              // Buscar nome do responsável se houver
+              let responsibleName = "Não atribuído";
+              if (leadInfo?.assigned_to) {
+                const { data: prof } = await supabase
+                  .from("profiles")
+                  .select("full_name, email")
+                  .eq("id", leadInfo.assigned_to)
+                  .maybeSingle();
+                responsibleName = prof?.full_name || prof?.email || "Responsável";
+              }
+
+              // 2. Interpolar variáveis dinâmicas em título e mensagem
+              const interpolate = (tpl: string) => {
+                let res = tpl || "";
+                res = res.replace(/{{s*lead.names*}}/gi, leadName)
+                         .replace(/{{s*lead.phones*}}/gi, leadPhone)
+                         .replace(/{{s*lead.emails*}}/gi, leadEmail)
+                         .replace(/{{s*lead.responsibles*}}/gi, responsibleName)
+                         .replace(/{{s*contact.names*}}/gi, leadName)
+                         .replace(/{{s*contact.phones*}}/gi, leadPhone)
+                         .replace(/{{s*workflow.names*}}/gi, typedCampaign.name || "Workflow")
+                         .replace(/{{s*nomes*}}/gi, leadName)
+                         .replace(/{{s*telefones*}}/gi, leadPhone);
+                return res;
+              };
+
+              const finalTitle = interpolate(rawTitle);
+              const finalMessage = interpolate(rawMessage);
+
+              // 3. Determinar os user_ids destinatários
+              let recipientUserIds: string[] = [];
+
+              if (recipientType === "user" && targetUserId) {
+                recipientUserIds = [targetUserId];
+              } else if (recipientType === "lead_owner") {
+                if (leadInfo?.assigned_to) {
+                  recipientUserIds = [leadInfo.assigned_to];
+                } else {
+                  console.warn("[ExecuteMessage] Nó de notificação configurado para lead_owner, mas lead não possui assigned_to");
+                }
+              } else if (recipientType === "department" && targetDeptId) {
+                const { data: deptMembers } = await supabase
+                  .from("department_members")
+                  .select("user_id")
+                  .eq("department_id", targetDeptId);
+                recipientUserIds = (deptMembers || []).map((dm: any) => dm.user_id);
+              } else {
+                // "all" - todos os membros ativos da empresa
+                if (companyId) {
+                  const { data: activeMembers } = await supabase
+                    .from("company_members")
+                    .select("user_id")
+                    .eq("company_id", companyId)
+                    .eq("is_active", true);
+                  recipientUserIds = (activeMembers || []).map((m: any) => m.user_id);
+                }
+              }
+
+              // Deduplicar destinatários
+              recipientUserIds = [...new Set(recipientUserIds)].filter(Boolean);
+
+              if (recipientUserIds.length === 0) {
+                console.warn("[ExecuteMessage] Nenhum usuário destinatário encontrado para o nó de notificação");
+                notifyResults.push({ destPhone: phoneClean, success: true, deliveredUsers: [] });
+                continue;
+              }
+
+              // 4. Montar link do chat do lead
+              const chatLink = (openChatOnClick && (leadId || phoneClean))
+                ? `/chat?${leadId ? `leadId=${leadId}` : `phone=${phoneClean}`}${companyId ? `&companyId=${companyId}` : ""}`
+                : "/chat";
+
+              const entity = leadId ? `lead:${leadId}` : undefined;
+
+              // 5. Inserir em alerts para cada usuário + Realtime broadcast
+              const alertRows = recipientUserIds.map((uId) => ({
+                company_id: companyId,
+                user_id: uId,
+                title: finalTitle,
+                description: finalMessage,
+                entity: entity,
+                link: chatLink,
+                severity: "info",
+                read: false,
+                metadata: {
+                  source: "workflow_node",
+                  workflow_id: effectiveSequenceId,
+                  lead_id: leadId,
+                  phone: phoneClean,
+                },
+              }));
+
+              const { data: insertedAlerts, error: alertInsertErr } = await supabase
+                .from("alerts")
+                .insert(alertRows)
+                .select("id, user_id");
+
+              if (alertInsertErr) {
+                console.error("[ExecuteMessage] Erro ao inserir alerts de notificação:", alertInsertErr);
+              }
+
+              // Emitir broadcast Realtime para o sininho/popup tocar em tempo real
+              try {
+                if (companyId) {
+                  const channel = supabase.channel(`notifications-${companyId}`);
+                  for (const rUserId of recipientUserIds) {
+                    await channel.send({
+                      type: "broadcast",
+                      event: "mention_notification",
+                      payload: {
+                        id: insertedAlerts?.find((a: any) => a.user_id === rUserId)?.id || `wf-${Date.now()}`,
+                        userId: rUserId,
+                        title: finalTitle,
+                        description: finalMessage,
+                        entity: entity,
+                        link: chatLink,
+                        created_at: new Date().toISOString(),
+                      },
+                    });
+                  }
+                }
+              } catch (realtimeErr) {
+                console.warn("[ExecuteMessage] Falha não impeditiva ao emitir realtime broadcast:", realtimeErr);
+              }
+
+              // 6. Enviar Push Notifications Mobile
+              try {
+                if (companyId) {
+                  await dispatchWebPushNotification(supabase, {
+                    companyId: companyId,
+                    userIds: recipientUserIds,
+                    title: finalTitle,
+                    body: finalMessage,
+                    messageId: `wf-notif-${node.id}-${Date.now()}`,
+                    conversationId: undefined,
+                  });
+                  console.log(`[ExecuteMessage] 📱 WebPush disparado para ${recipientUserIds.length} usuários`);
+                }
+              } catch (pushErr) {
+                console.warn("[ExecuteMessage] Falha não impeditiva no envio de Push Mobile:", pushErr);
+              }
+
+              notifyResults.push({
+                destPhone: phoneClean,
+                success: true,
+                deliveredUsers: recipientUserIds,
+              });
+            } catch (err: any) {
+              console.error("[ExecuteMessage] Erro ao processar notificação no workflow:", err);
+              notifyResults.push({
+                destPhone: phoneClean,
+                success: false,
+                deliveredUsers: [],
+                error: err?.message,
+              });
+            }
+          }
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: notifyResults.some(r => r.success) ? "success" : "failed",
+            startedAt: nodeStartedAt,
+            input: { recipientType, targetDeptId, targetUserId, rawTitle, rawMessage },
+            output: { results: notifyResults },
+          });
+
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;

@@ -70,6 +70,8 @@ import { getActionDefinition } from "./actions/actionRegistry";
 import { ActionSelectorModal } from "./actions/ActionSelectorModal";
 import { ActionEditors } from "./actions/ActionEditors";
 import { useWorkflowDefinitions, isActionTriggerWorkflow } from "@/hooks/useWorkflowDefinitions";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -538,6 +540,8 @@ export function UnifiedNodeConfigPanel({
   const { activeCompanyId } = useCompany();
   const { operators = [] } = useCallOperators();
   const { campaigns = [] } = useCallCampaigns();
+  const { departments = [] } = useDepartments();
+  const { members: companyMembers = [] } = useCompanyMembers();
 
   const [customFieldsMetadata, setCustomFieldsMetadata] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
@@ -3232,6 +3236,175 @@ export function UnifiedNodeConfigPanel({
 
           {/* FIELD_OP - Removido daqui, agora é renderizado via FieldMappingEditor no NodeEditorModal */}
 
+
+          {/* NOTIFICATION NODE */}
+          {node.nodeType === "notification" && (() => {
+            const recipientType = (currentConfig.recipientType as string) || "all";
+            const departmentId = (currentConfig.departmentId as string) || "";
+            const userId = (currentConfig.userId as string) || "";
+            const title = (currentConfig.title as string) || "";
+            const message = (currentConfig.message as string) || "";
+            const openChatOnClick = (currentConfig.openChatOnClick as boolean) ?? true;
+
+            return (
+              <div className="space-y-4">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2.5">
+                  <Bell className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="text-xs text-amber-800 leading-relaxed">
+                    Este nó enviará uma notificação no <strong>Sininho do Sistema</strong> e um <strong>Push Mobile</strong> para os usuários selecionados. Ao clicar, a tela do chat com o lead será aberta diretamente.
+                  </div>
+                </div>
+
+                {/* Tipo de Destinatário */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Quem deve receber a notificação?
+                  </Label>
+                  <Select
+                    value={recipientType}
+                    onValueChange={(val) => {
+                      updateConfig("recipientType", val);
+                      if (val === "all" || val === "lead_owner") {
+                        updateConfig("departmentId", null);
+                        updateConfig("userId", null);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="Selecione o destinatário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">
+                        🏢 Todos os membros da empresa
+                      </SelectItem>
+                      <SelectItem value="department" className="text-xs">
+                        👥 Todos os membros de um departamento
+                      </SelectItem>
+                      <SelectItem value="user" className="text-xs">
+                        👤 Usuário específico
+                      </SelectItem>
+                      <SelectItem value="lead_owner" className="text-xs">
+                        🎯 Responsável atual pelo Lead
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Selecionar Departamento se tipo for department */}
+                {recipientType === "department" && (
+                  <div className="space-y-1.5 pl-3 border-l-2 border-amber-500">
+                    <Label className="text-xs font-semibold text-slate-700">Selecione o Departamento *</Label>
+                    <Select
+                      value={departmentId}
+                      onValueChange={(val) => updateConfig("departmentId", val)}
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue placeholder="Escolha um departamento..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.length === 0 ? (
+                          <div className="p-2 text-xs text-slate-400 text-center">
+                            Nenhum departamento cadastrado. Crie no painel Super Admin.
+                          </div>
+                        ) : (
+                          departments.map((d) => (
+                            <SelectItem key={d.id} value={d.id} className="text-xs">
+                              {d.name} {d.member_count !== undefined ? `(${d.member_count} membros)` : ""}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Selecionar Usuário se tipo for user */}
+                {recipientType === "user" && (
+                  <div className="space-y-1.5 pl-3 border-l-2 border-amber-500">
+                    <Label className="text-xs font-semibold text-slate-700">Selecione o Usuário *</Label>
+                    <Select
+                      value={userId}
+                      onValueChange={(val) => updateConfig("userId", val)}
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue placeholder="Escolha um usuário..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companyMembers.length === 0 ? (
+                          <div className="p-2 text-xs text-slate-400 text-center">
+                            Nenhum usuário encontrado na empresa
+                          </div>
+                        ) : (
+                          companyMembers.map((m) => (
+                            <SelectItem key={m.user_id} value={m.user_id} className="text-xs">
+                              {m.full_name || m.email || m.user_id}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Título da Notificação */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Título / Assunto *
+                    </Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        updateConfig("title", title + val);
+                      }}
+                    />
+                  </div>
+                  <Input
+                    placeholder="Ex: Novo lead atribuído: {{lead.name}}"
+                    value={title}
+                    onChange={(e) => updateConfig("title", e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+
+                {/* Mensagem da Notificação */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Mensagem da Notificação *
+                    </Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        updateConfig("message", message + val);
+                      }}
+                    />
+                  </div>
+                  <Textarea
+                    placeholder="Ex: O lead {{lead.name}} ({{lead.phone}}) acabou de entrar e precisa de atendimento imediato."
+                    value={message}
+                    onChange={(e) => updateConfig("message", e.target.value)}
+                    rows={3}
+                    className="text-xs"
+                  />
+                </div>
+
+                {/* Abrir Chat ao clicar */}
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="space-y-0.5">
+                    <Label className="text-xs font-medium text-slate-800">Abrir Chat do Lead ao Clicar</Label>
+                    <p className="text-[11px] text-slate-500">
+                      Redireciona diretamente para a conversa de atendimento do lead.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={openChatOnClick}
+                    onCheckedChange={(checked) => updateConfig("openChatOnClick", checked)}
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           {/* COMING SOON placeholders - API / AI Assistant / legacy js_code */}
           {(node.nodeType === "api_call" || node.nodeType === "ai_agent" || node.nodeType === "js_code") && (

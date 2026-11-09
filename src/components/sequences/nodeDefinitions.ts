@@ -3,7 +3,7 @@ import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, MessagesSquare, PhoneCall,
-  Workflow
+  Workflow, Bell
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -72,6 +72,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
     ],
   },
   { blockType: "trigger_workflow", label: "Ativar outro fluxo", icon: Workflow, color: "bg-emerald-600" },
+  { blockType: "notification", label: "Notificação", icon: Bell, color: "bg-amber-600" },
   { blockType: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-indigo-600" },
   { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
   { blockType: "phone_call", label: "Ligação", icon: PhoneCall, color: "bg-pink-600" },
@@ -284,6 +285,14 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
       targetWorkflowId: "",
       targetWorkflowName: "",
     };
+    case "notification": return {
+      recipientType: "all", // "all" | "department" | "user" | "lead_owner"
+      departmentId: null,
+      userId: null,
+      title: "Notificação sobre {{lead.name}}",
+      message: "O lead {{lead.name}} foi atualizado no sistema.",
+      openChatOnClick: true,
+    };
     case "api_call": case "ai_agent": return {};
     default: return {};
   }
@@ -296,7 +305,7 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
 // stays at 8 rows regardless of how many content/action sub-types exist.
 export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
   const core: NodeTypeInfo[] = NODE_DEFINITIONS
-    .filter((b) => ["content", "delay", "condition", "randomizer", "action", "trigger_workflow"].includes(b.blockType))
+    .filter((b) => ["content", "delay", "condition", "randomizer", "action", "trigger_workflow", "notification"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
   const channels: NodeTypeInfo[] = NODE_DEFINITIONS

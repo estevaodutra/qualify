@@ -2579,6 +2579,8 @@ export function UnifiedSequenceBuilder({
                                         ? (actionDef?.label || (node.config.label as string) || "Ações")
                                         : node.nodeType === "trigger_workflow"
                                         ? ((node.config.targetWorkflowName as string) || "Ativar outro fluxo")
+                                        : node.nodeType === "notification"
+                                        ? ((node.config.title as string) || "Notificação")
                                         : ((node.config.label as string) || nodeInfo.label)}
                                     </p>
                                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
@@ -2588,6 +2590,8 @@ export function UnifiedSequenceBuilder({
                                         ? (actionDef?.category.toUpperCase() || "AÇÃO CRM")
                                         : node.nodeType === "trigger_workflow"
                                         ? "AUTOMAÇÃO"
+                                        : node.nodeType === "notification"
+                                        ? "NOTIFICAÇÃO"
                                         : nodeInfo.label}
                                     </p>
                                   </div>
@@ -2627,6 +2631,10 @@ export function UnifiedSequenceBuilder({
                               ) : (
                                 "Clique para selecionar o workflow..."
                               )
+                            ) : node.nodeType === "notification" ? (
+                              <span className="text-slate-600 line-clamp-2">
+                                {(node.config.message as string) || "Clique para configurar a notificação..."}
+                              </span>
                             ) : (
                               (() => {
                                 if (node.nodeType === "content" && Array.isArray(node.config.messages) && node.config.messages.length > 0) {
