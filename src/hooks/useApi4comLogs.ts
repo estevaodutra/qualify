@@ -47,6 +47,7 @@ function formatDuration(seconds: number): string {
 export function useApi4comLogs() {
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ["api4com-logs"],
+    refetchInterval: 10000,
     queryFn: async (): Promise<Api4comLogItem[]> => {
       const { data, error } = await (supabase as any)
         .from("call_logs")

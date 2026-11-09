@@ -112,7 +112,7 @@ export function CallActionDialog({
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
-  const { isOnline, status: sipStatus, connectSIP } = useWebphone();
+  const { connectSIP } = useWebphone();
   const view = useCallFloatingStore((s) => s.view);
   const setView = useCallFloatingStore((s) => s.setView);
   const [isDocked, setIsDocked] = useState(true);
@@ -165,6 +165,7 @@ export function CallActionDialog({
       });
       setForwardStack([]);
       autoDialTriggeredRef.current = false;
+      setDialError(null);
     }
   }, [open, callId, leadId, leadPhone, initialObservations, userId]);
 
@@ -219,6 +220,7 @@ export function CallActionDialog({
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const [isDialing, setIsDialing] = useState(false);
+  const [dialError, setDialError] = useState<string | null>(null);
 
   const isWorkflowCall = currentData.callId?.startsWith("wt_") || false;
   const realTaskId = isWorkflowCall ? currentData.callId.replace("wt_", "") : null;
@@ -1085,14 +1087,32 @@ export function CallActionDialog({
   };
 
   const handleManualDial = async () => {
+    if (isDialing) return;
+    setDialError(null);
     setIsDialing(true);
     setCurrentData(prev => ({ ...prev, callStatus: "dialing" }));
+    const updateFloatingStatus = (status: string, externalCallId?: string) => {
+      const store = useCallFloatingStore.getState();
+      if (store.activeCall) {
+        store.setActiveCall({
+          ...store.activeCall,
+          callStatus: status,
+          ...(externalCallId ? { externalCallId } : {}),
+        });
+      }
+      store.setCallStatus(status as "dialing" | "ringing" | "failed");
+    };
+    updateFloatingStatus("dialing");
+    const failDial = (message: string) => {
+      setDialError(message);
+      setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
+      updateFloatingStatus("failed");
+      toast({ title: "Falha na ligação", description: message, variant: "destructive" });
+    };
     try {
       const cleanPhone = currentData.leadPhone?.trim();
       if (!cleanPhone) {
-        toast({ title: "Telefone não informado", description: "Informe o telefone para ligar.", variant: "destructive" });
-        setCurrentData(prev => ({ ...prev, callStatus: "idle" }));
-        setIsDialing(false);
+        failDial("Informe o telefone para ligar.");
         return;
       }
 
@@ -1133,22 +1153,10 @@ export function CallActionDialog({
 
       // Se temos API4COM: Dispara chamada nativa diretamente na API4COM!
       if (operatorData?.api4com_token && operatorData?.extension) {
-        if (!isOnline && connectSIP) {
-          toast({
-            title: "Conectando Webphone...",
-            description: `Registrando ramal ${operatorData.extension} para a chamada...`,
-          });
-          const sipOk = await connectSIP();
-          if (!sipOk) {
-            toast({
-              title: "Webphone offline",
-              description: `Não foi possível registrar o ramal ${operatorData.extension}. Verifique a conexão com a internet e tente novamente.`,
-              variant: "destructive",
-            });
-            setIsDialing(false);
-            return;
-          }
-          await new Promise((r) => setTimeout(r, 600));
+        const sipOk = await connectSIP();
+        if (!sipOk) {
+          failDial(`O ramal ${operatorData.extension} não registrou no SIP. Confira a mensagem em Configurações de Telefonia e tente novamente.`);
+          return;
         }
 
         if (isWorkflowCall && realTaskId) {
@@ -1179,8 +1187,7 @@ export function CallActionDialog({
             } catch {}
           }
           if (!msg) msg = dialErr?.message || "Falha ao discar na API4COM";
-          toast({ title: "Erro na chamada", description: msg, variant: "destructive" });
-          setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
+          failDial(msg);
           if (isWorkflowCall && realTaskId) {
             await supabase.from("workflow_call_tasks").update({ status: "failed" }).eq("id", realTaskId);
             queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
@@ -1200,6 +1207,7 @@ export function CallActionDialog({
           externalCallId: dialRes.callId,
           callId: dialRes.callLogId || prev.callId,
         }));
+        updateFloatingStatus("ringing", dialRes.callId);
 
         if (isWorkflowCall && realTaskId) {
           await supabase
@@ -1218,6 +1226,10 @@ export function CallActionDialog({
       }
 
       // 2. Fallback legado: Fetch webhook configs
+      if (currentData.callId.startsWith("manual_") || currentData.campaignName === "Discagem Direta") {
+        failDial("Seu operador não tem token e ramal API4COM ativos nesta empresa. Configure o Webphone antes de discar.");
+        return;
+      }
       const targetUserId = currentData.userId || user?.id;
       let { data: configs } = await supabase
         .from("webhook_configs")
@@ -1239,8 +1251,7 @@ export function CallActionDialog({
 
       const webhookUrl = configs?.[0]?.url;
       if (!webhookUrl) {
-        toast({ title: "Webhook não configurado", description: "Vá em Painel Admin -> Webhooks e configure a categoria 'calls'.", variant: "destructive" });
-        setCurrentData(prev => ({ ...prev, callStatus: initialData.callStatus }));
+        failDial("Webhook de chamadas não configurado. Configure a integração de telefonia antes de discar.");
         return;
       }
 
@@ -1398,8 +1409,7 @@ export function CallActionDialog({
         }
       }
     } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
-      setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
+      failDial(err?.message || "Erro inesperado ao discar.");
     } finally {
       setIsDialing(false);
     }
@@ -1408,12 +1418,6 @@ export function CallActionDialog({
   // Trigger autoDial on mount if requested
   useEffect(() => {
     if (open && autoDial && (currentData.callId || currentData.leadPhone) && !autoDialTriggeredRef.current) {
-      try {
-        if (typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true") {
-          return;
-        }
-      } catch {}
-
       const alreadyConnected = ["on_call", "in_call", "answered", "completed", "ended"].includes(currentData.callStatus || "");
       if (!alreadyConnected) {
         autoDialTriggeredRef.current = true;
@@ -1685,6 +1689,11 @@ export function CallActionDialog({
             )}
           </div>
         </div>
+        {dialError && (
+          <div role="alert" className="rounded-lg border border-rose-400/40 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
+            {dialError}
+          </div>
+        )}
 
         {/* Audio recording player (if available) */}
         {currentData.audioUrl && (

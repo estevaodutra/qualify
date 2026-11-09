@@ -105,10 +105,11 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { isOnline, status: sipStatus, connectSIP } = useWebphone();
+  const { isOnline, connectSIP } = useWebphone();
   const [activeTab, setActiveTab] = useState<"dialer" | "queue" | "in_progress" | "history">("dialer");
   const [dialerNumber, setDialerNumber] = useState("");
   const [dialerLeadName, setDialerLeadName] = useState("");
+  const [isConnectingDialer, setIsConnectingDialer] = useState(false);
   const [search, setSearch] = useState("");
 
   const { activeCall, callStatus, duration, openCall, setView } = useCallFloatingStore();
@@ -567,14 +568,24 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
     setDialerLeadName("");
   };
 
-  const handleDialNumber = () => {
-    if (!isOnline) {
-      connectSIP();
-    }
+  const handleDialNumber = async () => {
+    if (isConnectingDialer) return;
     const clean = dialerNumber.replace(/\D/g, "");
     if (!clean || clean.length < 8) {
       toast.error("Digite um número com DDD para discar (mínimo 8 dígitos).");
       return;
+    }
+    if (!isOnline) {
+      setIsConnectingDialer(true);
+      try {
+        const connected = await connectSIP();
+        if (!connected) {
+          toast.error("Webphone offline. Verifique o erro em Configurações de Telefonia antes de ligar.");
+          return;
+        }
+      } finally {
+        setIsConnectingDialer(false);
+      }
     }
 
     const targetName = dialerLeadName.trim() || `Discagem (${formatPhone(clean)})`;
@@ -832,12 +843,12 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
               <Button
                 type="button"
                 onClick={handleDialNumber}
-                disabled={!dialerNumber.trim()}
+                disabled={!dialerNumber.trim() || isConnectingDialer}
                 className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md gap-2"
               >
-                <PhoneCall className="h-4 w-4" />
+                {isConnectingDialer ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
                 <span>
-                  {dialerNumber.trim() ? `Ligar para ${formatPhone(dialerNumber)}` : "Digite um número para discar"}
+                  {isConnectingDialer ? "Conectando ramal..." : dialerNumber.trim() ? `Ligar para ${formatPhone(dialerNumber)}` : "Digite um número para discar"}
                 </span>
               </Button>
             </div>
