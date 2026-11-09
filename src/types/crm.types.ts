@@ -1,3 +1,27 @@
+export interface CRMCompany {
+  id: string;
+  company_id: string;
+  name: string;
+  trade_name: string | null;
+  document: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  segment: string | null;
+  owner_id: string | null;
+  street: string | null;
+  address_number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  custom_fields: Record<string, string | number | boolean | string[] | null>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export interface PipelineGroup {
   id: string;
   company_id: string;
@@ -40,11 +64,15 @@ export interface Lead {
   user_id: string;
   company_id: string;
   name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   phone: string | null;
   telefone_fixo?: string | null;
   lid: string | null;
   email: string | null;
-  company_name: string | null;
+  company_name: string | null; // legado: manter durante a migração
+  crm_company_id?: string | null;
+  crm_company?: CRMCompany | null;
   website: string | null;
   document: string | null;
   birth_date: string | null;
@@ -81,6 +109,7 @@ export interface Deal {
   id: string;
   company_id: string;
   lead_id: string;
+  crm_company_id?: string | null;
   pipeline_id: string | null;
   stage_id: string | null;
   title: string;
@@ -104,6 +133,7 @@ export interface Deal {
 
   // Relations
   lead?: Lead;
+  crm_company?: CRMCompany | null;
 }
 
 export interface Activity {
