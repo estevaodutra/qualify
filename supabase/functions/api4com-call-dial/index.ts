@@ -23,8 +23,16 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const jwt = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error: authError } = jwt
+      ? await supabase.auth.getUser(jwt)
+      : { data: { user: null }, error: new Error("Sessão ausente") };
+    if (authError || !user) {
+      return new Response(JSON.stringify({ success: false, error: "Sessão inválida. Entre novamente no sistema." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
-    const { operator_id, user_id, phone, lead_id, campaign_id } = await req.json();
+    const { operator_id, phone, lead_id, campaign_id, workflow_task_id } = await req.json();
 
     if (!phone) {
       return new Response(
@@ -33,7 +41,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Localizar operador pelo operator_id ou user_id
+    // 1. O token da operadora nunca pode ser escolhido por outro usuário.
     let operator: any = null;
 
     if (operator_id) {
@@ -41,22 +49,23 @@ Deno.serve(async (req) => {
         .from("call_operators")
         .select("id, operator_name, extension, api4com_token, sip_domain, company_id, user_id")
         .eq("id", operator_id)
+        .eq("user_id", user.id)
         .maybeSingle();
       operator = op;
     }
 
-    if (!operator && user_id) {
+    if (!operator && !operator_id) {
       const { data: opList } = await supabase
         .from("call_operators")
         .select("id, operator_name, extension, api4com_token, sip_domain, company_id, user_id")
-        .eq("user_id", user_id)
+        .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(1);
       operator = opList?.[0] || null;
     }
 
     // Se o operador ainda não tiver token ou ramal preenchido, busca diretamente no profiles
-    const targetUserId = operator?.user_id || user_id;
+    const targetUserId = operator?.user_id || (!operator_id ? user.id : null);
     if ((!operator?.api4com_token || !operator?.extension) && targetUserId) {
       const { data: prof } = await supabase
         .from("profiles")
@@ -135,6 +144,7 @@ Deno.serve(async (req) => {
         callLogId: callLog.id,
         leadId: lead_id || null,
         campaignId: campaign_id || null,
+        workflowTaskId: workflow_task_id || null,
         operatorId: operator.id,
         companyId: operator.company_id,
         callRef: `cr_${callLog.id.slice(0, 8)}_${Date.now()}`,
@@ -215,7 +225,8 @@ Deno.serve(async (req) => {
         external_call_id: dialData.id || null,
         call_status: "ringing",
       })
-      .eq("id", callLog.id);
+      .eq("id", callLog.id)
+      .eq("call_status", "dialing");
 
     return new Response(
       JSON.stringify({

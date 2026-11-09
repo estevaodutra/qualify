@@ -70,6 +70,8 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const activeCallDataRef = useRef<ActiveCallData | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectingRef = useRef<Promise<boolean> | null>(null);
+  const intentionalDisconnectRef = useRef(false);
 
   // 1. Carregar operador do banco
   const fetchOperator = useCallback(async () => {
@@ -92,52 +94,11 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .maybeSingle();
 
         if (prof) {
-          if (prof.api4com_token) data.api4com_token = prof.api4com_token;
-          if (prof.api4com_extension) data.extension = prof.api4com_extension;
-          if (prof.api4com_domain) data.sip_domain = prof.api4com_domain;
-          if (prof.api4com_password) data.sip_password = prof.api4com_password;
-        }
-
-        // Se tem token mas a senha SIP estiver ausente, recupera diretamente da API4COM
-        if (data.api4com_token && (!data.sip_password || !data.extension)) {
-          try {
-            const sippulseRes = await fetch(
-              "https://api.api4com.com/api/v1/integrations?filter[where][gateway]=sippulse",
-              { headers: { Authorization: data.api4com_token } }
-            );
-            if (sippulseRes.ok) {
-              const list = await sippulseRes.json();
-              if (Array.isArray(list) && list.length > 0 && list[0]?.metadata) {
-                const meta = list[0].metadata;
-                data.extension = String(meta.username || data.extension || "");
-                data.sip_domain = String(meta.domain || data.sip_domain || "d2x.api4com.com");
-                data.sip_password = String(meta.password || "");
-
-                // Salva no perfil e no operador em background
-                supabase
-                  .from("profiles")
-                  .update({
-                    api4com_extension: data.extension,
-                    api4com_domain: data.sip_domain,
-                    api4com_password: data.sip_password,
-                  })
-                  .eq("id", user.id)
-                  .catch(console.warn);
-
-                supabase
-                  .from("call_operators")
-                  .update({
-                    extension: data.extension,
-                    sip_domain: data.sip_domain,
-                    sip_password: data.sip_password,
-                  })
-                  .eq("id", data.id)
-                  .catch(console.warn);
-              }
-            }
-          } catch (sipFetchErr) {
-            console.warn("[WebphoneContext] Aviso ao buscar SIP dinâmico:", sipFetchErr);
-          }
+          // O operador é a fonte atual; o perfil só preenche dados ainda ausentes.
+          if (!data.api4com_token) data.api4com_token = prof.api4com_token;
+          if (!data.extension) data.extension = prof.api4com_extension;
+          if (!data.sip_domain) data.sip_domain = prof.api4com_domain;
+          if (!data.sip_password) data.sip_password = prof.api4com_password;
         }
 
         setOperator(data);
@@ -231,7 +192,7 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    setStatus("connected");
+    setStatus(webphoneRef.current?.getUserAgent()?.isRegistered?.() ? "connected" : "disconnected");
   }, []);
 
   // 3. Inicializar e Conectar Webphone SIP
@@ -241,11 +202,12 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return false;
     }
 
-    if (isOnline && webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
+    if (webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
       return true;
     }
+    if (connectingRef.current) return connectingRef.current;
 
-    return new Promise<boolean>(async (resolve) => {
+    const attempt = new Promise<boolean>(async (resolve) => {
       let settled = false;
       let registrationTimeout: any = null;
       let regCheckInterval: any = null;
@@ -260,8 +222,14 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       try {
+        intentionalDisconnectRef.current = false;
         setStatus("connecting");
         setErrorMessage(null);
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Microfone indisponível. Abra o sistema em HTTPS e verifique o navegador.");
+        }
+        const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
+        microphone.getTracks().forEach((track) => track.stop());
 
         // Carregar libwebphone.js
         await loadLibwebphone();
@@ -274,18 +242,20 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (webphoneRef.current) {
           try {
             webphoneRef.current.getUserAgent()?.stop?.();
-            webphoneRef.current.getUserAgent()?.unregister?.();
           } catch {}
+          webphoneRef.current = null;
         }
 
         // Timeout de segurança para evitar loop infinito
         registrationTimeout = setTimeout(() => {
           console.warn("[Webphone] Timeout aguardando registro SIP");
+          try { webphoneRef.current?.getUserAgent()?.stop?.(); } catch {}
+          webphoneRef.current = null;
           setStatus("error");
           setIsOnline(false);
           setErrorMessage("Tempo limite esgotado ao registrar no servidor SIP. Verifique a conexão com a internet.");
           settle(false);
-        }, 12000);
+        }, 20000);
 
         const instanceId = `instance_${operator.id.slice(0, 8)}_${Date.now()}`;
 
@@ -321,6 +291,7 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const ua = wp.getUserAgent?.();
 
         const onRegistered = () => {
+          if (settled) return;
           console.log("[Webphone] SIP Registrado com sucesso para ramal:", operator.extension);
           setStatus("connected");
           setIsOnline(true);
@@ -341,36 +312,26 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setErrorMessage("Falha de autenticação SIP. Verifique a senha do ramal.");
           settle(false);
         };
+        const onConfigurationError = (_: unknown, __: unknown, error: Error) => {
+          setStatus("error");
+          setIsOnline(false);
+          setErrorMessage(error?.message || "Configuração SIP inválida.");
+          settle(false);
+        };
 
-        // Registrar listeners para todos os nomes de eventos possíveis do libwebphone
+        // Eventos publicados pela instância da libwebphone incluída no projeto.
         wp.on("userAgent.registration.registered", onRegistered);
-        wp.on("registration.registered", onRegistered);
-        wp.on("userAgent.registered", onRegistered);
-        wp.on("registered", onRegistered);
-        ua?.on?.("registered", onRegistered);
 
         wp.on("userAgent.registration.unregistered", onUnregistered);
-        wp.on("registration.unregistered", onUnregistered);
-        wp.on("userAgent.unregistered", onUnregistered);
-        wp.on("unregistered", onUnregistered);
-        ua?.on?.("unregistered", onUnregistered);
+        wp.on("userAgent.disconnected", () => {
+          if (intentionalDisconnectRef.current) return;
+          setIsOnline(false);
+          setStatus("disconnected");
+          setErrorMessage("Conexão SIP perdida. Reconecte o Webphone antes de ligar.");
+        });
 
         wp.on("userAgent.registration.failed", onRegistrationFailed);
-        wp.on("registration.failed", onRegistrationFailed);
-        wp.on("userAgent.registrationFailed", onRegistrationFailed);
-        wp.on("registrationFailed", onRegistrationFailed);
-        ua?.on?.("registrationFailed", onRegistrationFailed);
-
-        wp.onAny?.((evt: string, ...args: any[]) => {
-          console.log(`[Webphone Event] ${evt}`, args);
-          if (evt.includes("registered") || evt.includes("registration.registered")) {
-            onRegistered();
-          } else if (evt.includes("registration.failed")) {
-            onRegistrationFailed(args);
-          } else if (evt.includes("registration.unregistered")) {
-            onUnregistered();
-          }
-        });
+        wp.on("userAgent.configuration.error", onConfigurationError);
 
         // Polling ativo a cada 200ms para confirmar registro SIP mesmo se o evento falhar
         regCheckInterval = setInterval(() => {
@@ -384,16 +345,12 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }, 200);
 
         // INICIAR REGISTRO SIP NO WEBSOCKET
-        try {
-          console.log("[Webphone] Iniciando UA SIP para ramal:", operator.extension);
-          ua?.start?.(
-            String(operator.extension),
-            String(operator.sip_password),
-            String(operator.sip_domain)
-          );
-        } catch (startErr) {
-          console.warn("[Webphone] Aviso ao chamar ua.start:", startErr);
-        }
+        console.log("[Webphone] Iniciando UA SIP para ramal:", operator.extension);
+        ua?.start?.(
+          String(operator.extension),
+          String(operator.sip_password),
+          String(operator.sip_domain)
+        );
 
         // AUTO-ATENDIMENTO DA API4COM
         wp.on("call.created", (lwp: any, call: LibwebphoneCall) => {
@@ -415,27 +372,21 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setStatus("ringing"); // Ramal atendeu, agora aguardando o lead
           }
 
-          // Listener de status da chamada
-          call.on?.("call.answered", () => {
-            console.log("[Webphone] Chamada em andamento (conversação)");
-            setStatus("in_call");
-            setDuration(0);
-
-            if (timerRef.current) clearInterval(timerRef.current);
-            timerRef.current = setInterval(() => {
-              setDuration((prev) => prev + 1);
-            }, 1000);
-          });
-
-          call.on?.("call.ended", () => {
-            console.log("[Webphone] Chamada encerrada pelo SIP");
-            cleanupCall();
-          });
         });
 
-        wp.on("call.destroyed", () => {
-          cleanupCall();
+        // A libwebphone publica o ciclo da chamada no emissor principal.
+        wp.on("call.established", (_lwp: unknown, call: LibwebphoneCall) => {
+          if (currentCallRef.current !== call) return;
+          setStatus("in_call");
+          setDuration(0);
+          if (timerRef.current) clearInterval(timerRef.current);
+          timerRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
         });
+        const onCallEnded = (_lwp: unknown, call: LibwebphoneCall) => {
+          if (currentCallRef.current === call) cleanupCall();
+        };
+        wp.on("call.ended", onCallEnded);
+        wp.on("call.failed", onCallEnded);
 
         webphoneRef.current = wp;
         claimPrimaryTab();
@@ -443,14 +394,21 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error("[Webphone] Erro ao conectar SIP:", err);
         setStatus("error");
         setIsOnline(false);
-        setErrorMessage(err.message || "Erro ao conectar ao servidor SIP.");
+        setErrorMessage(
+          err?.name === "NotAllowedError"
+            ? "Microfone bloqueado. Permita o acesso nas configurações do navegador e tente novamente."
+            : err?.message || "Erro ao conectar ao servidor SIP."
+        );
         settle(false);
       }
     });
-  }, [hasSipConfig, operator, isOnline, claimPrimaryTab, cleanupCall]);
+    connectingRef.current = attempt;
+    try { return await attempt; } finally { connectingRef.current = null; }
+  }, [hasSipConfig, operator, claimPrimaryTab, cleanupCall]);
 
 
   const disconnectSIP = useCallback(() => {
+    intentionalDisconnectRef.current = true;
     if (webphoneRef.current) {
       try {
         const ua = webphoneRef.current.getUserAgent?.();
@@ -462,38 +420,20 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     cleanupCall();
     setIsOnline(false);
     setStatus("disconnected");
+    setErrorMessage(null);
   }, [cleanupCall]);
 
   const toggleOnline = useCallback(
     async (forceState?: boolean) => {
       const nextState = forceState !== undefined ? forceState : !isOnline;
       if (nextState) {
-        // Pedir permissão de microfone se necessário
-        try {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch {
-          toast({
-            title: "Microfone bloqueado",
-            description: "Permita o acesso ao microfone nas permissões do navegador.",
-            variant: "destructive",
-          });
-          return;
-        }
         await connectSIP();
       } else {
         disconnectSIP();
       }
     },
-    [isOnline, connectSIP, disconnectSIP, toast]
+    [isOnline, connectSIP, disconnectSIP]
   );
-
-  // Auto-conectar SIP em segundo plano quando credenciais estiverem prontas
-  useEffect(() => {
-    if (hasSipConfig && operator?.extension && status === "disconnected" && !isOnline) {
-      console.log("[Webphone] Auto-conectando SIP em segundo plano para ramal:", operator.extension);
-      connectSIP();
-    }
-  }, [hasSipConfig, operator?.extension, status, isOnline, connectSIP]);
 
   // 4. Iniciar Discagem (Click-to-Call)
   const dial = useCallback(
@@ -508,7 +448,11 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       leadName?: string;
       campaignId?: string;
     }): Promise<boolean> => {
-      if (!isOnline || status === "disconnected" || status === "error") {
+      if (activeCallDataRef.current) {
+        toast({ title: "Chamada em andamento", description: "Encerre a chamada atual antes de discar novamente." });
+        return false;
+      }
+      if (!isPrimaryTab || !webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
         toast({
           title: "Webphone offline",
           description: "Fique online no Webphone antes de realizar a ligação.",
@@ -551,26 +495,37 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw new Error(data?.error || error?.message || "Falha ao discar");
         }
 
+        const updatedCall = {
+          ...callData,
+          callLogId: data.callLogId,
+          externalCallId: data.callId,
+        };
+        activeCallDataRef.current = updatedCall;
         setActiveCall((prev) => ({
           ...prev,
           callLogId: data.callLogId,
-          externalCallId: data.externalCallId,
+          externalCallId: data.callId,
         }));
 
         setStatus("ringing");
         return true;
       } catch (err: any) {
+        let message = err?.message || "Falha ao discar";
+        if (err?.context?.json) {
+          const body = await err.context.json().catch(() => null);
+          if (body?.error) message = body.error;
+        }
         console.error("[Webphone] Erro ao discar:", err);
         toast({
           title: "Falha na chamada",
-          description: err.message,
+          description: message,
           variant: "destructive",
         });
         cleanupCall();
         return false;
       }
     },
-    [isOnline, status, operator?.id, cleanupCall, toast]
+    [isPrimaryTab, operator?.id, cleanupCall, toast]
   );
 
   // 5. Desligar Chamada
@@ -628,14 +583,32 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // 8. Sincronizar Operador com a API4COM
   const syncOperator = useCallback(
     async (token: string): Promise<{ success: boolean; error?: string }> => {
-      if (!operator?.id) {
-        return { success: false, error: "Nenhum operador vinculado." };
+      if (!user?.id || !activeCompanyId) {
+        return { success: false, error: "Selecione uma empresa antes de configurar o Webphone." };
       }
 
       try {
+        let operatorId = operator?.id;
+        if (!operatorId) {
+          const { data: profile } = await supabase.from("profiles")
+            .select("full_name, email").eq("id", user.id).maybeSingle();
+          const { data: created, error: createError } = await supabase
+            .from("call_operators")
+            .insert({
+              user_id: user.id,
+              company_id: activeCompanyId,
+              operator_name: profile?.full_name || profile?.email || "Operador",
+              is_active: true,
+              status: "offline",
+            })
+            .select("id")
+            .single();
+          if (createError || !created) throw createError || new Error("Falha ao criar operador.");
+          operatorId = created.id;
+        }
         const { data, error } = await supabase.functions.invoke("api4com-sync-operator", {
           body: {
-            operator_id: operator.id,
+            operator_id: operatorId,
             api4com_token: token,
           },
         });
@@ -647,7 +620,10 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         await fetchOperator();
         toast({
           title: "Ramal Sincronizado",
-          description: `Ramal ${data.sip?.extension} vinculado e webhook configurado com sucesso!`,
+          description: data.webhookConfigured
+            ? `Ramal ${data.sip?.extension} vinculado e webhook configurado.`
+            : `Ramal ${data.sip?.extension} vinculado. Falhou a configuração do webhook; o histórico pode não atualizar.`,
+          variant: data.webhookConfigured ? "default" : "destructive",
         });
 
         return { success: true };
@@ -655,7 +631,7 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return { success: false, error: err.message };
       }
     },
-    [operator?.id, fetchOperator, toast]
+    [operator?.id, user?.id, activeCompanyId, fetchOperator, toast]
   );
 
   return (

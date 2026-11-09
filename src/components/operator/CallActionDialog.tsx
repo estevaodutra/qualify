@@ -1166,6 +1166,7 @@ export function CallActionDialog({
             phone: cleanPhone,
             lead_id: currentData.leadId || null,
             campaign_id: currentData.campaignId || null,
+            workflow_task_id: isWorkflowCall ? realTaskId : null,
           }
         });
 
@@ -1190,13 +1191,13 @@ export function CallActionDialog({
 
         toast({
           title: "Chamada iniciada!",
-          description: `Chamando ramal ${operatorData.extension}... Atenda para conectar com ${cleanPhone}.`,
+          description: `Ramal ${operatorData.extension} conectado. Discando para ${cleanPhone}...`,
         });
 
         setCurrentData(prev => ({
           ...prev,
-          callStatus: "in_call",
-          externalCallId: dialRes.externalCallId,
+          callStatus: "ringing",
+          externalCallId: dialRes.callId,
           callId: dialRes.callLogId || prev.callId,
         }));
 
@@ -1204,10 +1205,11 @@ export function CallActionDialog({
           await supabase
             .from("workflow_call_tasks")
             .update({
-              status: "in_call",
-              ...(dialRes.externalCallId ? { external_call_id: dialRes.externalCallId } : {}),
+              status: "ringing",
+              ...(dialRes.callId ? { external_call_id: dialRes.callId } : {}),
             })
-            .eq("id", realTaskId);
+            .eq("id", realTaskId)
+            .eq("status", "dialing");
           queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
         }
 

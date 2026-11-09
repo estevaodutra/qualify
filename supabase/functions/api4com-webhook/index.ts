@@ -27,11 +27,12 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Processar em background
-  (async () => {
+  const processing = (async () => {
     try {
       const { eventType, id: externalCallId, duration, hangupCause, hangupCauseCode, recordUrl, metadata } = body;
       const callLogId = metadata?.callLogId;
       const operatorId = metadata?.operatorId;
+      const workflowTaskId = metadata?.workflowTaskId;
 
       console.log(`[api4com-webhook] Evento: ${eventType} para chamada ${externalCallId}`);
 
@@ -46,9 +47,16 @@ Deno.serve(async (req) => {
         }
 
         if (callLogId) {
-          await supabase.from("call_logs").update(updateData).eq("id", callLogId);
+          await supabase.from("call_logs").update(updateData).eq("id", callLogId)
+            .in("call_status", ["dialing", "ringing", "in_progress"]);
         } else if (externalCallId) {
-          await supabase.from("call_logs").update(updateData).eq("external_call_id", externalCallId);
+          await supabase.from("call_logs").update(updateData).eq("external_call_id", externalCallId)
+            .in("call_status", ["dialing", "ringing", "in_progress"]);
+        }
+        if (workflowTaskId) {
+          await supabase.from("workflow_call_tasks")
+            .update({ status: "in_call", external_call_id: externalCallId })
+            .eq("id", workflowTaskId).in("status", ["dialing", "ringing", "in_call"]);
         }
       } else if (eventType === "channel-hangup") {
         // Chamada finalizada
@@ -83,6 +91,11 @@ Deno.serve(async (req) => {
         } else if (externalCallId) {
           await supabase.from("call_logs").update(updateData).eq("external_call_id", externalCallId);
         }
+        if (workflowTaskId) {
+          await supabase.from("workflow_call_tasks")
+            .update({ status: finalStatus, completed_at: new Date().toISOString() })
+            .eq("id", workflowTaskId);
+        }
 
         // Liberar o operador
         if (operatorId) {
@@ -100,6 +113,12 @@ Deno.serve(async (req) => {
       console.error("[api4com-webhook] Erro no processamento assíncrono:", err);
     }
   })();
+  const edgeRuntime = (globalThis as any).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(processing);
+  } else {
+    await processing;
+  }
 
   return new Response(JSON.stringify({ received: true, event: body.eventType }), {
     status: 200,

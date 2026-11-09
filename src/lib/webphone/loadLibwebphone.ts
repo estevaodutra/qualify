@@ -24,8 +24,8 @@ export function loadLibwebphone(): Promise<void> {
       if (window.libwebphone) {
         return resolve();
       }
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", (e) => reject(e));
+      existing.addEventListener("load", () => window.libwebphone ? resolve() : reject(new Error("Biblioteca Webphone indisponível após carregamento")), { once: true });
+      existing.addEventListener("error", (e) => reject(e), { once: true });
       return;
     }
 
@@ -36,11 +36,14 @@ export function loadLibwebphone(): Promise<void> {
       if (window.libwebphone) {
         resolve();
       } else {
+        loadPromise = null;
+        script.remove();
         reject(new Error("libwebphone script loaded but window.libwebphone not found"));
       }
     };
     script.onerror = (err) => {
       loadPromise = null;
+      script.remove();
       reject(new Error(`Falha ao carregar libwebphone.js: ${err}`));
     };
     document.head.appendChild(script);

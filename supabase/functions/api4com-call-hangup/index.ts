@@ -14,6 +14,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const jwt = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const { data: { user } } = jwt ? await supabase.auth.getUser(jwt) : { data: { user: null } };
+    if (!user) return new Response(JSON.stringify({ success: false, error: "Sessão inválida." }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { operator_id, external_call_id, call_log_id } = await req.json();
 
@@ -28,6 +32,7 @@ Deno.serve(async (req) => {
       .from("call_operators")
       .select("id, api4com_token")
       .eq("id", operator_id)
+      .eq("user_id", user.id)
       .single();
 
     if (!operator?.api4com_token) {
@@ -58,7 +63,9 @@ Deno.serve(async (req) => {
           call_status: "completed",
           ended_at: new Date().toISOString(),
         })
-        .eq("id", call_log_id);
+        .eq("id", call_log_id)
+        .eq("operator_id", operator_id)
+        .in("call_status", ["dialing", "ringing", "in_progress"]);
     }
 
     await supabase

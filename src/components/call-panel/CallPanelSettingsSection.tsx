@@ -24,7 +24,7 @@ export function CallPanelSettingsSection({
 }: CallPanelSettingsSectionProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("operators");
-  const { operator, hasSipConfig, isOnline, status, syncOperator, toggleOnline } = useWebphone();
+  const { operator, hasSipConfig, isOnline, status, errorMessage, syncOperator, toggleOnline } = useWebphone();
 
   const [tokenInput, setTokenInput] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -103,6 +103,11 @@ export function CallPanelSettingsSection({
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {errorMessage && (
+                <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {errorMessage}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-lg border bg-muted/20 p-3">
                   <span className="text-xs text-muted-foreground block">Ramal SIP</span>

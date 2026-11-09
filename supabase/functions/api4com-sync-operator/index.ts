@@ -14,6 +14,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const jwt = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const { data: { user } } = jwt ? await supabase.auth.getUser(jwt) : { data: { user: null } };
+    if (!user) return new Response(JSON.stringify({ success: false, error: "Sessão inválida." }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { operator_id, api4com_token } = await req.json();
 
@@ -22,6 +26,14 @@ Deno.serve(async (req) => {
         JSON.stringify({ success: false, error: "operator_id e api4com_token são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+    const { data: targetOperator } = await supabase.from("call_operators")
+      .select("user_id").eq("id", operator_id).maybeSingle();
+    const { data: adminRole } = await supabase.from("user_roles")
+      .select("user_id").eq("user_id", user.id).eq("role", "superadmin").maybeSingle();
+    if (!targetOperator || (targetOperator.user_id !== user.id && !adminRole)) {
+      return new Response(JSON.stringify({ success: false, error: "Sem acesso a este operador." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const cleanToken = api4com_token.trim();
@@ -120,6 +132,7 @@ Deno.serve(async (req) => {
     }
 
     let savedIntegrationId = existingIntegrationId;
+    let webhookConfigured = false;
     const patchRes = await fetch("https://api.api4com.com/api/v1/integrations", {
       method: "PATCH",
       headers: {
@@ -132,6 +145,7 @@ Deno.serve(async (req) => {
     if (patchRes.ok) {
       const patchData = await patchRes.json();
       savedIntegrationId = patchData.id || savedIntegrationId;
+      webhookConfigured = true;
     } else {
       console.warn("Aviso ao configurar webhook API4COM:", await patchRes.text());
     }
@@ -165,6 +179,7 @@ Deno.serve(async (req) => {
           extension,
           domain: sipDomain,
         },
+        webhookConfigured,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
