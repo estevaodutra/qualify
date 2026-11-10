@@ -1863,8 +1863,8 @@ Deno.serve(async (req) => {
           const responseData = result.details || result;
 
           // Parse Z-API response
-          const zaapId = result.zaapId || null;
-          const externalMessageId = result.messageId || null;
+          const zaapId = result?.zaapId || null;
+          const externalMessageId = result?.messageId || null;
 
           // Update log
           if (logEntry?.id) {
@@ -2002,13 +2002,29 @@ Deno.serve(async (req) => {
           // Direct payload / webhook resolution (e.g. {{body.nome}}, {{data.user}}, {{webhook.body.id}}, {{user}}, {{mac_key}})
           const payloadObj = triggerContext.webhookPayload || (triggerContext as any).payload || triggerContext;
           if (payloadObj && typeof payloadObj === "object") {
+            const findDeepVal = (obj: any, targetKey: string): any => {
+              if (!obj || typeof obj !== "object") return undefined;
+              if (obj[targetKey] !== undefined) return obj[targetKey];
+              for (const k of Object.keys(obj)) {
+                if (typeof obj[k] === "object" && obj[k] !== null) {
+                  const f = findDeepVal(obj[k], targetKey);
+                  if (f !== undefined) return f;
+                }
+              }
+              return undefined;
+            };
+
             const resolveVal = (rawKey: string): any => {
               const key = rawKey.trim();
+              const lastKey = key.split(".").pop() || key;
               return getNestedProp(payloadObj, key) 
                 ?? getNestedProp(payloadObj, key.replace(/^webhook\./, ''))
                 ?? getNestedProp(payloadObj.body || payloadObj, key.replace(/^body\./, ''))
                 ?? getNestedProp(payloadObj.data || payloadObj, key.replace(/^data\./, ''))
-                ?? getNestedProp(triggerContext.customFields, key);
+                ?? getNestedProp(payloadObj, key.replace(/^body\.data\./, ''))
+                ?? getNestedProp(payloadObj, key.replace(/^body\.data\.reseller\./, ""))
+                ?? getNestedProp(triggerContext.customFields, key)
+                ?? findDeepVal(payloadObj, lastKey);
             };
 
             result = result.replace(/\{\{([^{}]+)\}\}/g, (match, rawKey) => {
@@ -4676,13 +4692,11 @@ Deno.serve(async (req) => {
 
               if (matchedFromActive) {
                 effectiveContentDestinations = [matchedFromActive];
+                console.log(`[ExecuteMessage] 🎯 Destino validado no fluxo: ${matchedFromActive.group_jid} (${matchedFromActive.group_name})`);
               } else {
-                const isPrivate = targetJid.endsWith("@s.whatsapp.net");
-                effectiveContentDestinations = [{
-                  group_jid: targetJid,
-                  group_name: isPrivate ? "Contato Personalizado" : "Grupo Personalizado",
-                  isPrivate: isPrivate,
-                }];
+                // REGRA: Se o ID informado não está nas configurações deste fluxo, não enviar para outros grupos
+                console.warn(`[ExecuteMessage] ⚠️ Grupo ${targetJid} não pertence aos destinos configurados neste fluxo. Cancelando envio para evitar disparo indevido.`);
+                effectiveContentDestinations = [];
               }
               console.log(`[ExecuteMessage] 🎯 Bloco ${node.id} utilizando destino customizado: ${targetJid} (Substituindo ${activeDestinations.length} destino(s) padrão)`);
             } else {
@@ -4859,8 +4873,8 @@ Deno.serve(async (req) => {
                   const responseTimeMs = Date.now() - sendStartTime;
                   const responseData = result.details || result;
                   
-                  const zaapId = result.zaapId || null;
-                  const externalMessageId = result.messageId || null;
+                  const zaapId = result?.zaapId || null;
+                  const externalMessageId = result?.messageId || null;
                   
                   if (logEntry?.id) {
                     await supabase
@@ -6050,8 +6064,8 @@ Deno.serve(async (req) => {
               const responseData = result.details || result;
 
               // Parse Z-API response
-              const zaapId = result.zaapId || null;
-              const externalMessageId = result.messageId || null;
+              const zaapId = result?.zaapId || null;
+              const externalMessageId = result?.messageId || null;
 
               // Update log
               if (logEntry?.id) {

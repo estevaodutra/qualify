@@ -428,22 +428,112 @@ Deno.serve(async (req) => {
     let targetGroups: { group_jid: string; group_name: string | null; instance_id: string | null }[] = [];
 
     if (shouldSendToGroup) {
-      const explicitGroupJid = payload.group_jid 
+      // Helper para buscar chaves recursivamente em payloads aninhados
+      const findDeepValue = (obj: any, targetKey: string): any => {
+        if (!obj || typeof obj !== "object") return undefined;
+        if (obj[targetKey] !== undefined) return obj[targetKey];
+        for (const k of Object.keys(obj)) {
+          if (typeof obj[k] === "object" && obj[k] !== null) {
+            const found = findDeepValue(obj[k], targetKey);
+            if (found !== undefined) return found;
+          }
+        }
+        return undefined;
+      };
+
+      // Helper para resolver variáveis de template tipo {{body.data.reseller.custom_fields.link_do_grupo}}
+      const resolveTplFromPayload = (tpl: string): string | null => {
+        if (!tpl || typeof tpl !== "string") return null;
+        const match = tpl.match(/\{\{([^{}]+)\}\}/) || tpl.match(/\{([^{}]+)\}/);
+        if (!match) {
+          const trimmed = tpl.trim();
+          return trimmed ? trimmed : null;
+        }
+        const rawPath = match[1].trim();
+        const lastKey = rawPath.split(".").pop() || rawPath;
+        const val = getNestedProp(webhookPayload, rawPath)
+          ?? getNestedProp(payload, rawPath)
+          ?? getNestedProp(payload, rawPath.replace(/^body\./, ""))
+          ?? getNestedProp(payload, rawPath.replace(/^body\.data\./, ""))
+          ?? getNestedProp(payload, rawPath.replace(/^body\.data\.reseller\./, ""))
+          ?? findDeepValue(payload, lastKey);
+        return val ? String(val).trim() : null;
+      };
+
+      // 1. Verifica se os nós do fluxo possuem destino customizado (ex: {{custom_fields.link_do_grupo}})
+      let nodeSpecifiedGroup: string | null = null;
+      try {
+        const { data: allSeqNodes } = await supabase
+          .from("sequence_nodes")
+          .select("config")
+          .eq("sequence_id", typedSequence.id);
+
+        if (allSeqNodes && allSeqNodes.length > 0) {
+          for (const sn of allSeqNodes) {
+            const destTpl = (sn.config?.customDestination || sn.config?.targetDestination || "") as string;
+            if (destTpl && typeof destTpl === "string" && destTpl.trim()) {
+              const resolved = resolveTplFromPayload(destTpl);
+              if (resolved && (resolved.includes("@g.us") || resolved.replace(/\D/g, "").startsWith("1203") || resolved.replace(/\D/g, "").length >= 16)) {
+                nodeSpecifiedGroup = resolved;
+                break;
+              }
+            }
+          }
+        }
+      } catch (errNodes) {
+        console.warn("[TriggerSequence] Could not pre-fetch sequence nodes for custom destination:", errNodes);
+      }
+
+      // 2. Verifica se o payload do webhook informou um ID/JID de grupo diretamente
+      const payloadSpecifiedGroup = payload.group_jid 
         || payload.groupJid 
         || payload.group_id 
         || payload.groupId 
         || payload.chat_id 
-        || (payload.body && (payload.body.group_jid || payload.body.group_id || payload.body.chat_id || payload.body.groupJid))
-        || (payload.data && (payload.data.group_jid || payload.data.group_id || payload.data.chat_id || payload.data.groupJid));
+        || payload.link_do_grupo
+        || (payload.body && (payload.body.group_jid || payload.body.group_id || payload.body.chat_id || payload.body.groupJid || payload.body.link_do_grupo))
+        || (payload.data && (payload.data.group_jid || payload.data.group_id || payload.data.chat_id || payload.data.groupJid || payload.data.link_do_grupo))
+        || findDeepValue(payload, "link_do_grupo")
+        || findDeepValue(payload, "group_jid")
+        || findDeepValue(payload, "group_id")
+        || findDeepValue(payload, "chat_id");
 
-      if (explicitGroupJid) {
-        let cleanGroupJid = String(explicitGroupJid).trim();
+      const rawGroupTarget = nodeSpecifiedGroup || payloadSpecifiedGroup;
+
+      if (rawGroupTarget) {
+        let cleanGroupJid = String(rawGroupTarget).trim();
         if (!cleanGroupJid.includes("@")) {
           const digits = cleanGroupJid.replace(/\D/g, "");
           cleanGroupJid = `${digits}@g.us`;
         }
-        console.log(`[TriggerSequence] Webhook provided specific group destination: ${cleanGroupJid}`);
-        targetGroups = [{ group_jid: cleanGroupJid, group_name: null, instance_id: primaryInstanceId || null }];
+        const cleanDigits = cleanGroupJid.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+
+        // REGRA SOLICITADA:
+        // Verifica se aquele ID de grupo informado está dentro das configurações do grupo (pasta/campanha).
+        // Se estiver, manda mensagem SÓ para aquele grupo em específico.
+        const matchedGroup = (existingLinkedGroups || []).find((g) => {
+          const gClean = (g.group_jid || "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+          return gClean && gClean === cleanDigits;
+        });
+
+        if (matchedGroup) {
+          console.log(`[TriggerSequence] 🎯 Grupo informado (${cleanGroupJid}) VALIDADO entre os grupos do fluxo (${matchedGroup.group_name}). Enviando SOMENTE para ele!`);
+          targetGroups = [{
+            group_jid: matchedGroup.group_jid,
+            group_name: matchedGroup.group_name,
+            instance_id: matchedGroup.instance_id || primaryInstanceId || null,
+          }];
+        } else {
+          console.warn(`[TriggerSequence] ⚠️ Grupo informado (${cleanGroupJid}) NÃO pertence aos grupos configurados neste fluxo/pasta (${(existingLinkedGroups || []).map(g => g.group_jid).join(", ")}). Cancelando disparo para não enviar para outros grupos.`);
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              skipped: true, 
+              message: `Grupo ${cleanGroupJid} não pertence a este fluxo/pasta. Envio cancelado para segurança.` 
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       } else if (selectedGroupJids && selectedGroupJids.length > 0) {
         // Target ALL groups configured in selectedGroupJids
         // Deduplicate by numeric identifier so both 123-group and 123@g.us aren't duplicated
