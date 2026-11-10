@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Play, FastForward, X, Check, Save, RefreshCw } from "lucide-react";
 import { LocalNode } from "@/components/sequences/shared-types";
 import { Badge } from "@/components/ui/badge";
+import { getNodeVisual } from "@/components/sequences/nodeDefinitions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +37,14 @@ export function NodeEditorHeader({
   isUnsaved,
   isSimulating,
 }: NodeEditorHeaderProps) {
+  const nodeTitle = node.nodeType === "trigger"
+    ? "Início / Gatilhos"
+    : getNodeVisual(
+      node.nodeType,
+      node.config.contentType as string | undefined,
+      node.config.actionType as string | undefined,
+    )?.label || node.nodeType;
+
   return (
     <div className="flex flex-col gap-3 border-b px-4 py-3 bg-white shrink-0">
       <div className="flex items-center gap-3 min-w-0">
@@ -45,7 +54,7 @@ export function NodeEditorHeader({
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="font-semibold text-sm text-slate-800 truncate">
-              {node.nodeType === "trigger" ? "Início / Gatilhos" : node.nodeType === "delay" ? "Delay / Espera" : ((node.config.label as string) || node.nodeType)}
+              {nodeTitle}
             </span>
             <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-5 font-bold text-slate-400 shrink-0">
               {node.nodeType === "delay" ? "Delay" : node.nodeType === "trigger" ? "Gatilho" : node.nodeType}

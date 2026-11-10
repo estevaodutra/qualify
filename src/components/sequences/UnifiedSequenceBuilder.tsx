@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, ReactNode, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
 import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch, TriggerItem, normalizePollOptions } from "./shared-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,11 +99,59 @@ export function UnifiedSequenceBuilder({
   workflowConfig: initialWorkflowConfig = {}
 }: UnifiedSequenceBuilderProps) {
   const { toast } = useToast();
+  const { activeCompanyId } = useCompany();
   const { saveVersion, isSavingVersion } = useSequences(sequenceId);
   const [localNodes, setLocalNodes] = useState<LocalNode[]>([]);
   const [localConnections, setLocalConnections] = useState<LocalConnection[]>([]);
   const [localWorkflowConfig, setLocalWorkflowConfig] = useState<Record<string, unknown>>(initialWorkflowConfig);
   const [sequenceName, setSequenceName] = useState(initialName);
+  const [dealDestinationNames, setDealDestinationNames] = useState<{
+    pipelines: Record<string, string>;
+    stages: Record<string, string>;
+  }>({ pipelines: {}, stages: {} });
+
+  const selectedDealDestinationIds = localNodes.reduce((ids, node) => {
+    const actionType = (node.config.actionType as string) || node.nodeType;
+    if (!["create_deal", "deal_create", "move_deal_stage", "move_deal", "deal_move"].includes(actionType)) return ids;
+    const parameters = (node.config.parameters as Record<string, unknown>) || node.config;
+    if (typeof parameters.pipelineId === "string" && parameters.pipelineId) ids.pipelines.add(parameters.pipelineId);
+    if (typeof parameters.stageId === "string" && parameters.stageId) ids.stages.add(parameters.stageId);
+    return ids;
+  }, { pipelines: new Set<string>(), stages: new Set<string>() });
+  const dealDestinationKey = JSON.stringify({
+    pipelines: [...selectedDealDestinationIds.pipelines].sort(),
+    stages: [...selectedDealDestinationIds.stages].sort(),
+  });
+
+  useEffect(() => {
+    const { pipelines: pipelineIds, stages: stageIds } = JSON.parse(dealDestinationKey) as {
+      pipelines: string[];
+      stages: string[];
+    };
+    if (!activeCompanyId || (!pipelineIds.length && !stageIds.length)) {
+      setDealDestinationNames({ pipelines: {}, stages: {} });
+      return;
+    }
+
+    let cancelled = false;
+    const loadNames = async () => {
+      const [pipelinesResult, stagesResult] = await Promise.all([
+        pipelineIds.length
+          ? supabase.from("pipelines").select("id, name").eq("company_id", activeCompanyId).in("id", pipelineIds)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        stageIds.length
+          ? supabase.from("pipeline_stages").select("id, name").in("id", stageIds)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ]);
+      if (cancelled) return;
+      setDealDestinationNames({
+        pipelines: Object.fromEntries((pipelinesResult.data || []).map((pipeline) => [pipeline.id, pipeline.name])),
+        stages: Object.fromEntries((stagesResult.data || []).map((stage) => [stage.id, stage.name])),
+      });
+    };
+    void loadNames();
+    return () => { cancelled = true; };
+  }, [activeCompanyId, dealDestinationKey]);
 
   useEffect(() => {
     if (initialWorkflowConfig && Object.keys(initialWorkflowConfig).length > 0) {
@@ -2588,6 +2637,16 @@ export function UnifiedSequenceBuilder({
                             const isAction = node.nodeType === "action" || isActionSubType(node.nodeType) || isActionSubType(node.config.actionType as string) || !!getActionDefinition((node.config.actionType as string) || node.nodeType);
                             const actionDef = isAction ? getActionDefinition((node.config.actionType as string) || (isActionSubType(node.nodeType) && node.nodeType !== "action" ? node.nodeType : undefined) || "create_lead") : null;
                             const condDef = isCondition ? getConditionDefinition(node.config.conditionType as string) : null;
+                            const dealActionType = (node.config.actionType as string) || node.nodeType;
+                            const dealParameters = (node.config.parameters as Record<string, unknown>) || node.config;
+                            const pipelineId = typeof dealParameters.pipelineId === "string" ? dealParameters.pipelineId : "";
+                            const stageId = typeof dealParameters.stageId === "string" ? dealParameters.stageId : "";
+                            const destination = `${pipelineId ? dealDestinationNames.pipelines[pipelineId] || "Pipeline selecionada" : "Pipeline não definida"} / ${stageId ? dealDestinationNames.stages[stageId] || "Etapa selecionada" : "Etapa não definida"}`;
+                            const dealPreview = ["move_deal_stage", "move_deal", "deal_move"].includes(dealActionType)
+                              ? `Da etapa atual → ${destination}`
+                              : ["create_deal", "deal_create"].includes(dealActionType)
+                                ? `Criar negócio em ${destination}`
+                                : null;
 
                             return (
                               <>
@@ -2605,7 +2664,7 @@ export function UnifiedSequenceBuilder({
                                         ? ((node.config.targetWorkflowName as string) || "Ativar outro fluxo")
                                         : node.nodeType === "notification"
                                         ? ((node.config.title as string) || "Notificação")
-                                        : ((node.config.label as string) || nodeInfo.label)}
+                                        : (isRandomizer ? nodeInfo.label : ((node.config.label as string) || nodeInfo.label))}
                                     </p>
                                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                                       {isCondition
@@ -2624,9 +2683,12 @@ export function UnifiedSequenceBuilder({
                                 {/* Card Content / Description */}
                                 {(!isRandomizer || randomizerBranches.length === 0) && <div
                                   className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
+                                  title={dealPreview || undefined}
                                 >
                                   {isCondition ? (
                                     condDef?.description || "Clique para selecionar e configurar esta regra..."
+                                  ) : dealPreview ? (
+                                    dealPreview
                                   ) : isAction ? (
                                     actionDef?.description || "Clique para selecionar e configurar esta ação..."
                                   ) : isRandomizer ? (

@@ -4128,23 +4128,6 @@ export function UnifiedNodeConfigPanel({
       </div>
       <div className="px-6 py-6">
         <div className="space-y-4">
-            {/* Node Label/Name */}
-            {node.nodeType !== "content" && node.nodeType !== "delay" && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Nome do componente</Label>
-                  <Input
-                    placeholder={nodeInfo.title}
-                    value={(currentConfig.label as string) || ""}
-                    onChange={e => updateConfig("label", e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <Separator />
-              </>
-            )}
-
-
             {/* CONTENT / ACTION sub-type selector */}
             {/* CONTENT / ACTION sub-type selector */}
             {resolvedNodeType === "content" && (() => {
