@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { buildVirtualCrmSystemFields } from "@/config/crmSystemFields";
 import {
   Plus, Trash2, Edit, Eye, EyeOff, Lock, Unlock, GripVertical,
   HelpCircle, Settings2, Sliders, Type, Hash, Calendar, ToggleLeft, ListCollapse, Loader2,
@@ -41,6 +42,7 @@ export interface CustomFieldMetadata {
   order_index?: number;
   options?: CustomFieldOption[] | string[] | null;
   created_at?: string;
+  is_virtual_system?: boolean;
 }
 
 const FIELD_TYPES = [
@@ -103,6 +105,29 @@ export function CustomFieldsTab() {
     }
   }, [name, isEditing]);
 
+
+  const mergeSystemFields = (dbFields: CustomFieldMetadata[]) => {
+    if (!activeCompany?.id) return dbFields;
+    const virtual = buildVirtualCrmSystemFields(activeCompany.id) as CustomFieldMetadata[];
+    const byEntityKey = new Map<string, CustomFieldMetadata>();
+
+    virtual.forEach((field) => {
+      byEntityKey.set(`${field.category}:${field.key}`, field);
+    });
+
+    dbFields.forEach((field) => {
+      byEntityKey.set(`${field.category}:${field.key}`, field);
+    });
+
+    return Array.from(byEntityKey.values()).sort((a, b) => {
+      if (a.category !== b.category) {
+        const order = { lead: 0, company: 1, deal: 2 };
+        return order[a.category] - order[b.category];
+      }
+      return (a.order_index ?? 9999) - (b.order_index ?? 9999);
+    });
+  };
+
   const fetchFields = async () => {
     if (!activeCompany?.id) return;
     setIsLoading(true);
@@ -145,9 +170,9 @@ export function CustomFieldsTab() {
               .order("created_at", { ascending: true }) as any;
           }
 
-          setFields((seededQuery.data || []) as CustomFieldMetadata[]);
+          setFields(mergeSystemFields((seededQuery.data || []) as CustomFieldMetadata[]));
         } catch {
-          setFields([]);
+          setFields(mergeSystemFields([]));
         }
       } else {
         const normalized = data.map((f: any) => {
@@ -160,7 +185,7 @@ export function CustomFieldsTab() {
             options: fieldOpts || []
           };
         });
-        setFields(normalized as CustomFieldMetadata[]);
+        setFields(mergeSystemFields(normalized as CustomFieldMetadata[]));
       }
     } catch (err: any) {
       console.error("Error fetching custom fields:", err);
@@ -197,6 +222,13 @@ export function CustomFieldsTab() {
   };
 
   const handleOpenEdit = (field: CustomFieldMetadata) => {
+    if (field.is_virtual_system) {
+      toast({
+        title: "Campo padrão do sistema",
+        description: "Este campo já faz parte do CRM. A edição avançada fica disponível após a sincronização da migration.",
+      });
+      return;
+    }
     setIsEditing(true);
     setCurrentFieldId(field.id);
     setName(field.name);
@@ -635,7 +667,14 @@ export function CustomFieldsTab() {
                           </button>
 
                           <div className="flex items-center gap-1 border-l border-border/40 pl-2">
-                            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground" onClick={() => handleOpenEdit(field)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={Boolean(field.is_virtual_system)}
+                              title={field.is_virtual_system ? "Campo padrão aguardando sincronização do banco" : "Editar campo"}
+                              className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground disabled:opacity-25"
+                              onClick={() => handleOpenEdit(field)}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button
