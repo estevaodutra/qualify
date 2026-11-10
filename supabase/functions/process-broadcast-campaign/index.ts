@@ -9,6 +9,12 @@ declare const EdgeRuntime: {
   waitUntil: (promise: Promise<any>) => void;
 } | undefined;
 
+function getRandomDelay(minSec: number, maxSec: number): number {
+  const safeMin = Math.max(10, minSec);
+  const safeMax = Math.max(safeMin, maxSec);
+  return Math.floor(safeMin + Math.random() * (safeMax - safeMin + 1));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -81,7 +87,7 @@ Deno.serve(async (req) => {
         .eq("id", broadcastId);
 
       return new Response(
-        JSON.stringify({ success: true, message: "Disparo retomado." }),
+        JSON.stringify({ success: true, message: "Disparo retomado com cadência Anti-Ban." }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -94,11 +100,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Determine how many leads to dispatch in this batch
+    // Resolve anti-ban delay configuration (default 3 to 5 minutes)
+    const minDelaySeconds = campaign.min_delay_seconds || 
+      (campaign.audience_filters as any)?.minDelaySeconds || 180;
+    const maxDelaySeconds = campaign.max_delay_seconds || 
+      (campaign.audience_filters as any)?.maxDelaySeconds || 300;
+
+    // Determine how many leads to consider in this batch
     let batchLimit = explicitLimit;
     if (!batchLimit) {
       if (action === "run_now" && campaign.distribution_mode === "immediate") {
-        batchLimit = 10000; // All pending
+        batchLimit = 10000;
       } else {
         batchLimit = campaign.daily_limit || 10;
       }
@@ -108,18 +120,17 @@ Deno.serve(async (req) => {
     const todayStr = new Date().toISOString().split("T")[0];
     let recipientsQuery = supabase
       .from("broadcast_recipients")
-      .select("id, lead_id, batch_index, scheduled_date")
+      .select("id, lead_id, batch_index, scheduled_date, scheduled_for")
       .eq("broadcast_id", broadcastId)
       .eq("status", "pending")
       .order("batch_index", { ascending: true })
       .order("created_at", { ascending: true });
 
-    // If it's a scheduled batch run, prefer those with scheduled_date <= today
     if (action === "run_batch" && campaign.distribution_mode === "daily_limit") {
       recipientsQuery = recipientsQuery.lte("scheduled_date", todayStr);
     }
 
-    const { data: recipients, error: recError } = await recipientsQuery.limit(batchLimit);
+    const { data: rawRecipients, error: recError } = await recipientsQuery.limit(batchLimit);
 
     if (recError) {
       return new Response(
@@ -128,15 +139,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!recipients || recipients.length === 0) {
-      // Check if there are ANY pending recipients left (ignoring date)
-      const { count: pendingCount } = await supabase
-        .from("broadcast_recipients")
-        .select("*", { count: "exact", head: true })
-        .eq("broadcast_id", broadcastId)
-        .eq("status", "pending");
+    let recipients = rawRecipients || [];
 
-      if (!pendingCount || pendingCount === 0) {
+    if (recipients.length === 0) {
+      // Check if there are ANY pending recipients left (ignoring date)
+      const { data: nextRecipients } = await supabase
+        .from("broadcast_recipients")
+        .select("id, lead_id, batch_index, scheduled_date, scheduled_for")
+        .eq("broadcast_id", broadcastId)
+        .eq("status", "pending")
+        .order("batch_index", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(batchLimit);
+
+      if (!nextRecipients || nextRecipients.length === 0) {
         await supabase
           .from("broadcast_campaigns")
           .update({
@@ -158,29 +174,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      // If user clicked "Disparar Lote" manually, but scheduled_date > today, take next pending batch!
-      const { data: nextRecipients } = await supabase
-        .from("broadcast_recipients")
-        .select("id, lead_id, batch_index, scheduled_date")
-        .eq("broadcast_id", broadcastId)
-        .eq("status", "pending")
-        .order("batch_index", { ascending: true })
-        .order("created_at", { ascending: true })
-        .limit(batchLimit);
-
-      if (!nextRecipients || nextRecipients.length === 0) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Nenhum disparo pendente na fila.",
-            dispatchedCount: 0,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Use nextRecipients instead
-      recipients.push(...nextRecipients);
+      recipients = nextRecipients;
     }
 
     // Set campaign status to running
@@ -193,24 +187,46 @@ Deno.serve(async (req) => {
       })
       .eq("id", broadcastId);
 
-    // Extract lead IDs and recipient IDs
-    const leadIds = recipients.map((r: any) => r.lead_id);
-    const recipientIds = recipients.map((r: any) => r.id);
+    // =========================================================================
+    // ANTI-BAN 1-BY-1 SEQUENCING:
+    // Sorteia intervalo aleatório [minDelaySeconds, maxDelaySeconds] para cada lead.
+    // O 1º lead dispara IMEDIATAMENTE.
+    // Os leads subsequentes recebem scheduled_for espaçado aleatoriamente para o
+    // cron (process-scheduled-messages) acioná-los um a um.
+    // =========================================================================
+    const firstRecipient = recipients[0];
+    const now = new Date();
+    let currentCursor = new Date(now.getTime());
 
-    // Mark these recipients as 'processing' so they aren't picked up multiple times
-    const processingIso = new Date().toISOString();
-    await supabase
-      .from("broadcast_recipients")
-      .update({ status: "processing", updated_at: processingIso })
-      .in("id", recipientIds);
+    // Atualiza o agendamento sequencial dos contatos deste lote
+    for (let i = 1; i < recipients.length; i++) {
+      const rec = recipients[i];
+      const randomDelay = getRandomDelay(minDelaySeconds, maxDelaySeconds);
+      currentCursor = new Date(currentCursor.getTime() + randomDelay * 1000);
 
-    // Background Dispatch Worker
+      // Salva no banco o horário programado do lead
+      await supabase
+        .from("broadcast_recipients")
+        .update({
+          scheduled_for: currentCursor.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", rec.id);
+    }
+
+    // Dispara o PRIMEIRO lead agora de forma individual (1 por vez)
     const backgroundTask = async () => {
-      console.log(`[BroadcastRunner] Starting dispatch of ${leadIds.length} leads for campaign ${broadcastId}`);
+      console.log(`[BroadcastRunner] Dispatching 1st lead (${firstRecipient.lead_id}) for campaign ${broadcastId}`);
+      
+      // Marca o 1º como processing
+      await supabase
+        .from("broadcast_recipients")
+        .update({ status: "processing", updated_at: new Date().toISOString() })
+        .eq("id", firstRecipient.id);
+
       const startWorkflowUrl = `${supabaseUrl}/functions/v1/start-workflow-for-leads`;
-      let successCount = 0;
-      let failCount = 0;
-      let executionError = null;
+      let isSuccess = false;
+      let errorMessage = null;
 
       try {
         const response = await fetch(startWorkflowUrl, {
@@ -221,108 +237,80 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             workflowId: campaign.workflow_id,
-            leadIds,
+            leadIds: [firstRecipient.lead_id], // Dispara APENAS 1 LEAD!
             instanceId: campaign.instance_id || undefined,
           }),
         });
 
         const result = await response.json().catch(() => ({}));
-        if (response.ok) {
-          successCount = result.successCount ?? recipients.length;
-          failCount = result.failCount ?? 0;
+        if (response.ok && (result.successCount ?? 0) > 0) {
+          isSuccess = true;
         } else {
-          executionError = result.error || "Falha ao executar fluxo";
-          failCount = recipients.length;
+          errorMessage = result.error || "Falha ao executar fluxo para o lead";
         }
       } catch (err: any) {
-        executionError = err.message || "Erro de rede ao disparar";
-        failCount = recipients.length;
+        errorMessage = err.message || "Erro de rede";
       }
 
       const nowIso = new Date().toISOString();
 
-      // Update recipients status
-      if (successCount > 0 && failCount === 0) {
-        await supabase
-          .from("broadcast_recipients")
-          .update({
-            status: "sent",
-            dispatched_at: nowIso,
-            updated_at: nowIso,
-          })
-          .in("id", recipientIds);
-      } else if (failCount > 0 && successCount === 0) {
-        await supabase
-          .from("broadcast_recipients")
-          .update({
-            status: "failed",
-            error_message: executionError || "Falha no disparo do fluxo",
-            dispatched_at: nowIso,
-            updated_at: nowIso,
-          })
-          .in("id", recipientIds);
-      } else {
-        const sentIds = recipientIds.slice(0, successCount);
-        const failedIds = recipientIds.slice(successCount);
+      // Atualiza o 1º destinatário
+      await supabase
+        .from("broadcast_recipients")
+        .update({
+          status: isSuccess ? "sent" : "failed",
+          dispatched_at: nowIso,
+          error_message: errorMessage,
+          updated_at: nowIso,
+        })
+        .eq("id", firstRecipient.id);
 
-        if (sentIds.length > 0) {
-          await supabase
-            .from("broadcast_recipients")
-            .update({ status: "sent", dispatched_at: nowIso, updated_at: nowIso })
-            .in("id", sentIds);
-        }
-        if (failedIds.length > 0) {
-          await supabase
-            .from("broadcast_recipients")
-            .update({ status: "failed", error_message: "Erro no envio do lote", dispatched_at: nowIso, updated_at: nowIso })
-            .in("id", failedIds);
-        }
-      }
+      // Atualiza contadores da campanha
+      const { data: freshCamp } = await supabase
+        .from("broadcast_campaigns")
+        .select("sent_count, failed_count, total_leads")
+        .eq("id", broadcastId)
+        .single();
 
-      // Refresh final counts
+      const newSent = (freshCamp?.sent_count || 0) + (isSuccess ? 1 : 0);
+      const newFailed = (freshCamp?.failed_count || 0) + (!isSuccess ? 1 : 0);
+
       const { count: currentPending } = await supabase
         .from("broadcast_recipients")
         .select("*", { count: "exact", head: true })
         .eq("broadcast_id", broadcastId)
         .in("status", ["pending", "processing"]);
 
-      const { data: freshCamp } = await supabase
-        .from("broadcast_campaigns")
-        .select("sent_count, failed_count")
-        .eq("id", broadcastId)
-        .single();
-
-      const newSentCount = (freshCamp?.sent_count || 0) + successCount;
-      const newFailedCount = (freshCamp?.failed_count || 0) + failCount;
-      const isNowCompleted = (currentPending ?? 0) === 0;
+      const isCompleted = (currentPending ?? 0) === 0;
 
       await supabase
         .from("broadcast_campaigns")
         .update({
-          sent_count: newSentCount,
-          failed_count: newFailedCount,
+          sent_count: newSent,
+          failed_count: newFailed,
           pending_count: currentPending ?? 0,
-          status: isNowCompleted ? "completed" : "running",
-          completed_at: isNowCompleted ? nowIso : null,
+          status: isCompleted ? "completed" : "running",
+          completed_at: isCompleted ? nowIso : null,
           updated_at: nowIso,
         })
         .eq("id", broadcastId);
 
-      console.log(`[BroadcastRunner] Finished batch for ${broadcastId}: ${successCount} sent, ${failCount} failed.`);
+      console.log(`[BroadcastRunner] 1st lead dispatched for ${broadcastId}. Next leads will be processed 1-by-1 with random delay ${minDelaySeconds}-${maxDelaySeconds}s.`);
     };
 
-    // Execute background worker without blocking response
     if (typeof EdgeRuntime !== "undefined" && typeof EdgeRuntime.waitUntil === "function") {
       EdgeRuntime.waitUntil(backgroundTask());
     } else {
-      backgroundTask().catch((e) => console.error("[BroadcastRunner] Background task error:", e));
+      backgroundTask().catch((e) => console.error("[BroadcastRunner] Error:", e));
     }
 
-    // Respond immediately to browser in < 300ms!
+    const minDelayMin = Math.round(minDelaySeconds / 60);
+    const maxDelayMin = Math.round(maxDelaySeconds / 60);
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Lote de ${recipients.length} disparos iniciado com sucesso!`,
+        message: `Disparo iniciado! 1º lead sendo enviado agora e os demais ${recipients.length - 1} contatos programados individualmente com intervalo de ${minDelayMin} a ${maxDelayMin} minutos.`,
         batchCount: recipients.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

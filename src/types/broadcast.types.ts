@@ -31,6 +31,8 @@ export interface BroadcastCampaign {
   scheduled_at: string;
   distribution_mode: BroadcastDistributionMode;
   daily_limit: number;
+  min_delay_seconds: number;
+  max_delay_seconds: number;
   send_time_start: string;
   send_time_end: string;
   workdays_only: boolean;
@@ -66,6 +68,7 @@ export interface BroadcastRecipient {
   lead_id: string;
   batch_index: number;
   scheduled_date: string;
+  scheduled_for?: string | null;
   status: RecipientStatus;
   dispatched_at: string | null;
   error_message: string | null;
@@ -88,6 +91,8 @@ export interface CreateBroadcastInput {
   instanceId?: string;
   distributionMode: BroadcastDistributionMode;
   dailyLimit: number;
+  minDelaySeconds?: number;
+  maxDelaySeconds?: number;
   sendTimeStart: string;
   sendTimeEnd: string;
   workdaysOnly: boolean;

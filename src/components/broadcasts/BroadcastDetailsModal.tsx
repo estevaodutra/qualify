@@ -320,9 +320,16 @@ export function BroadcastDetailsModal({
                           {rec.lead?.phone || "—"}
                         </TableCell>
                         <TableCell className="py-2">
-                          <Badge variant="outline" className="text-[11px] font-normal">
-                            Lote {rec.batch_index} ({rec.scheduled_date})
-                          </Badge>
+                          <div className="space-y-0.5">
+                            <Badge variant="outline" className="text-[11px] font-normal">
+                              Lote {rec.batch_index} ({rec.scheduled_date})
+                            </Badge>
+                            {rec.scheduled_for && rec.status === "pending" && (
+                              <span className="block text-[10px] text-primary font-mono">
+                                Previsto: {format(new Date(rec.scheduled_for), "dd/MM 'às' HH:mm")}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-2">
                           {getRecipientStatusBadge(rec.status)}
@@ -407,6 +414,13 @@ export function BroadcastDetailsModal({
                   <div className="flex justify-between py-1 border-b border-border/30">
                     <span>Limite Diário de Disparos:</span>
                     <strong className="text-foreground">{campaign.daily_limit} contatos/dia</strong>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-border/30">
+                    <span>Intervalo entre Disparos (Anti-Ban):</span>
+                    <strong className="text-amber-500 font-semibold">
+                      {Math.round((campaign.min_delay_seconds || (campaign.audience_filters as any)?.minDelaySeconds || 180) / 60)} a{" "}
+                      {Math.round((campaign.max_delay_seconds || (campaign.audience_filters as any)?.maxDelaySeconds || 300) / 60)} min (aleatório • 1 por vez)
+                    </strong>
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/30">
                     <span>Janela de Envio:</span>

@@ -8,7 +8,10 @@ import {
   BroadcastRecipient,
   CreateBroadcastInput,
 } from "@/types/broadcast.types";
-import { calculateBroadcastSchedule } from "@/utils/broadcastUtils";
+import {
+  calculateBroadcastSchedule,
+  generateRecipientsWithSchedule,
+} from "@/utils/broadcastUtils";
 
 export function useBroadcastCampaigns() {
   const { user } = useAuth();
@@ -58,13 +61,19 @@ export function useBroadcastCampaigns() {
       const totalLeads = input.selectedLeadIds.length;
       const startDate = input.scheduledAt ? new Date(input.scheduledAt) : new Date();
 
-      // Calculate schedule & completion date
+      const minDelaySeconds = input.minDelaySeconds || 180;
+      const maxDelaySeconds = input.maxDelaySeconds || 300;
+
+      // Calculate schedule & completion date with delays
       const schedule = calculateBroadcastSchedule({
         totalLeads,
         dailyLimit: input.distributionMode === "immediate" ? totalLeads : input.dailyLimit,
         startDate,
         workdaysOnly: input.workdaysOnly,
+        sendTimeStart: input.sendTimeStart,
         sendTimeEnd: input.sendTimeEnd,
+        minDelaySeconds,
+        maxDelaySeconds,
       });
 
       const initialStatus =
@@ -84,10 +93,16 @@ export function useBroadcastCampaigns() {
           scheduled_at: startDate.toISOString(),
           distribution_mode: input.distributionMode,
           daily_limit: input.dailyLimit,
+          min_delay_seconds: minDelaySeconds,
+          max_delay_seconds: maxDelaySeconds,
           send_time_start: input.sendTimeStart,
           send_time_end: input.sendTimeEnd,
           workdays_only: input.workdaysOnly,
-          audience_filters: input.filters,
+          audience_filters: {
+            ...input.filters,
+            minDelaySeconds,
+            maxDelaySeconds,
+          },
           total_leads: totalLeads,
           pending_count: totalLeads,
           sent_count: 0,
@@ -102,27 +117,19 @@ export function useBroadcastCampaigns() {
         throw new Error(`Erro ao criar disparo: ${campaignError?.message}`);
       }
 
-      // Generate recipients rows with calculated batch dates
-      const recipientRows: any[] = [];
-      let leadIndex = 0;
-
-      for (const batch of schedule.batches) {
-        const batchLeads = input.selectedLeadIds.slice(leadIndex, leadIndex + batch.count);
-        leadIndex += batch.count;
-
-        const dateStr = batch.date.toISOString().split("T")[0];
-
-        for (const leadId of batchLeads) {
-          recipientRows.push({
-            broadcast_id: campaign.id,
-            company_id: activeCompanyId || null,
-            lead_id: leadId,
-            batch_index: batch.batchIndex,
-            scheduled_date: dateStr,
-            status: "pending",
-          });
-        }
-      }
+      // Generate recipients rows with calculated batch dates and 1-by-1 random delays
+      const recipientRows = generateRecipientsWithSchedule({
+        broadcastId: campaign.id,
+        companyId: activeCompanyId || null,
+        leadIds: input.selectedLeadIds,
+        batches: schedule.batches,
+        startDate,
+        minDelaySeconds,
+        maxDelaySeconds,
+        sendTimeStart: input.sendTimeStart,
+        sendTimeEnd: input.sendTimeEnd,
+        workdaysOnly: input.workdaysOnly,
+      });
 
       // Insert recipients in chunks of 500 to avoid payload limits
       const chunkSize = 500;

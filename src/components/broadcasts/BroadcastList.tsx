@@ -200,6 +200,8 @@ export function BroadcastList({
             const pending = Math.max(0, total - (sent + failed));
             const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
             const isActionLoading = actionLoadingId === camp.id;
+            const minDelayM = Math.round((camp.min_delay_seconds || (camp.audience_filters as any)?.minDelaySeconds || 180) / 60);
+            const maxDelayM = Math.round((camp.max_delay_seconds || (camp.audience_filters as any)?.maxDelaySeconds || 300) / 60);
 
             return (
               <Card
@@ -220,6 +222,7 @@ export function BroadcastList({
                         {getStatusBadge(camp.status)}
                         <Badge variant="outline" className="text-[10px] text-muted-foreground">
                           {camp.distribution_mode === "immediate" ? "Imediato" : `Anti-Ban: ${camp.daily_limit}/dia`}
+                          {` • ${minDelayM}~${maxDelayM} min/lead`}
                         </Badge>
                       </div>
 

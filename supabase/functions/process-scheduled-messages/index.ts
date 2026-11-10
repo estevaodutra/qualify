@@ -1748,6 +1748,152 @@ Deno.serve(async (req) => {
       }
     }
 
+    // =========================================================================
+    // BROADCAST CAMPAIGNS RUNNER (1 lead por vez por campanha com delay aleatório)
+    // =========================================================================
+    let broadcastLeadsProcessed = 0;
+    try {
+      const { data: runningCampaigns } = await supabase
+        .from("broadcast_campaigns")
+        .select("*")
+        .eq("status", "running");
+
+      if (runningCampaigns && runningCampaigns.length > 0) {
+        for (const camp of runningCampaigns) {
+          // 1. Checa dias úteis
+          if (camp.workdays_only && (currentDay === 0 || currentDay === 6)) {
+            continue; // Pula finais de semana
+          }
+
+          // 2. Checa janela de horário
+          const start = camp.send_time_start || "00:00";
+          const end = camp.send_time_end || "23:59";
+          if (currentTime < start || currentTime > end) {
+            continue; // Fora do horário comercial da campanha
+          }
+
+          // 3. Busca no máximo 1 lead pendente que já atingiu o horário de disparo
+          const nowIso = now.toISOString();
+          const { data: dueRecipients } = await supabase
+            .from("broadcast_recipients")
+            .select("id, lead_id, scheduled_for, batch_index")
+            .eq("broadcast_id", camp.id)
+            .eq("status", "pending")
+            .or(`scheduled_for.is.null,scheduled_for.lte.${nowIso}`)
+            .order("batch_index", { ascending: true })
+            .order("scheduled_for", { ascending: true, nullsFirst: true })
+            .order("created_at", { ascending: true })
+            .limit(1);
+
+          if (dueRecipients && dueRecipients.length > 0) {
+            const recipient = dueRecipients[0];
+            console.log(`[Scheduler] 🚀 Disparando lead ${recipient.lead_id} para broadcast ${camp.name} (${camp.id})`);
+
+            // Marca como processing
+            await supabase
+              .from("broadcast_recipients")
+              .update({ status: "processing", updated_at: nowIso })
+              .eq("id", recipient.id);
+
+            let isSuccess = false;
+            let errorMessage = null;
+
+            try {
+              const startWfRes = await fetch(`${supabaseUrl}/functions/v1/start-workflow-for-leads`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  workflowId: camp.workflow_id,
+                  leadIds: [recipient.lead_id], // 1 por vez!
+                  instanceId: camp.instance_id || undefined,
+                }),
+              });
+
+              const wfResult = await startWfRes.json().catch(() => ({}));
+              if (startWfRes.ok && (wfResult.successCount ?? 0) > 0) {
+                isSuccess = true;
+              } else {
+                errorMessage = wfResult.error || "Falha na execução do fluxo";
+              }
+            } catch (err: any) {
+              errorMessage = err.message || "Erro de rede";
+            }
+
+            const dispatchedIso = new Date().toISOString();
+
+            // Atualiza destinatário
+            await supabase
+              .from("broadcast_recipients")
+              .update({
+                status: isSuccess ? "sent" : "failed",
+                error_message: errorMessage,
+                dispatched_at: dispatchedIso,
+                updated_at: dispatchedIso,
+              })
+              .eq("id", recipient.id);
+
+            broadcastLeadsProcessed++;
+
+            // Atualiza contadores da campanha
+            const newSent = (camp.sent_count || 0) + (isSuccess ? 1 : 0);
+            const newFailed = (camp.failed_count || 0) + (!isSuccess ? 1 : 0);
+
+            const { count: currentPending } = await supabase
+              .from("broadcast_recipients")
+              .select("*", { count: "exact", head: true })
+              .eq("broadcast_id", camp.id)
+              .in("status", ["pending", "processing"]);
+
+            const isNowCompleted = (currentPending ?? 0) === 0;
+
+            await supabase
+              .from("broadcast_campaigns")
+              .update({
+                sent_count: newSent,
+                failed_count: newFailed,
+                pending_count: currentPending ?? 0,
+                status: isNowCompleted ? "completed" : "running",
+                completed_at: isNowCompleted ? dispatchedIso : null,
+                updated_at: dispatchedIso,
+              })
+              .eq("id", camp.id);
+
+            // Garante que o PRÓXIMO lead pendente tenha scheduled_for com delay aleatório
+            if (!isNowCompleted) {
+              const minSec = camp.min_delay_seconds || 180;
+              const maxSec = camp.max_delay_seconds || 300;
+              const randomDelay = Math.floor(minSec + Math.random() * (maxSec - minSec + 1));
+              const nextDispatchTime = new Date(Date.now() + randomDelay * 1000);
+
+              const { data: nextLead } = await supabase
+                .from("broadcast_recipients")
+                .select("id, scheduled_for")
+                .eq("broadcast_id", camp.id)
+                .eq("status", "pending")
+                .order("batch_index", { ascending: true })
+                .order("created_at", { ascending: true })
+                .limit(1);
+
+              if (nextLead && nextLead.length > 0 && !nextLead[0].scheduled_for) {
+                await supabase
+                  .from("broadcast_recipients")
+                  .update({
+                    scheduled_for: nextDispatchTime.toISOString(),
+                    updated_at: dispatchedIso,
+                  })
+                  .eq("id", nextLead[0].id);
+              }
+            }
+          }
+        }
+      }
+    } catch (bcError) {
+      console.error("[Scheduler] Error processing broadcast campaigns:", bcError);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

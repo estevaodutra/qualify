@@ -1,6 +1,6 @@
 {
-  "commit": "6ffb97599a38ea5987dc722d42912a846452342f",
-  "shortCommit": "6ffb975",
-  "message": "feat(broadcasts): selecao de multiplos grupos e extracao direta ignorando admins",
-  "builtAt": "2026-11-10T18:21:34.047Z"
+  "commit": "6eac20b93bb96610a9232f944df53dbe6641fb7f",
+  "shortCommit": "6eac20b",
+  "message": "fix(quiz): sync redirect progress bar with percentage and replace arrows with drag-and-drop handle",
+  "builtAt": "2026-11-10T18:41:59.548Z"
 }

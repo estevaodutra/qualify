@@ -112,6 +112,8 @@ export function NewBroadcastWizard({
   // Form State - Step 3: Cadence & Anti-Ban
   const [distributionMode, setDistributionMode] = useState<BroadcastDistributionMode>("daily_limit");
   const [dailyLimit, setDailyLimit] = useState<number>(10);
+  const [minDelayMinutes, setMinDelayMinutes] = useState<number>(3);
+  const [maxDelayMinutes, setMaxDelayMinutes] = useState<number>(5);
   const [workdaysOnly, setWorkdaysOnly] = useState<boolean>(true);
   const [sendTimeStart, setSendTimeStart] = useState("09:00");
   const [sendTimeEnd, setSendTimeEnd] = useState("18:00");
@@ -190,9 +192,22 @@ export function NewBroadcastWizard({
       dailyLimit: distributionMode === "immediate" ? total : dailyLimit,
       startDate: start,
       workdaysOnly,
+      sendTimeStart,
       sendTimeEnd,
+      minDelaySeconds: minDelayMinutes * 60,
+      maxDelaySeconds: maxDelayMinutes * 60,
     });
-  }, [effectiveSelectedLeadIds.length, distributionMode, dailyLimit, startDateStr, sendTimeStart, workdaysOnly, sendTimeEnd]);
+  }, [
+    effectiveSelectedLeadIds.length,
+    distributionMode,
+    dailyLimit,
+    startDateStr,
+    sendTimeStart,
+    sendTimeEnd,
+    workdaysOnly,
+    minDelayMinutes,
+    maxDelayMinutes,
+  ]);
 
   // Reset wizard on open
   useEffect(() => {
@@ -206,6 +221,8 @@ export function NewBroadcastWizard({
       setDeselectedLeadIds(new Set());
       setDistributionMode("daily_limit");
       setDailyLimit(10);
+      setMinDelayMinutes(3);
+      setMaxDelayMinutes(5);
       setWorkdaysOnly(true);
       setStartDateStr(new Date().toISOString().split("T")[0]);
       setGroupSearchQuery("");
@@ -323,6 +340,8 @@ export function NewBroadcastWizard({
         instanceId: instanceId !== "default" ? instanceId : undefined,
         distributionMode,
         dailyLimit: distributionMode === "immediate" ? effectiveSelectedLeadIds.length : dailyLimit,
+        minDelaySeconds: Math.max(1, minDelayMinutes) * 60,
+        maxDelaySeconds: Math.max(minDelayMinutes, maxDelayMinutes) * 60,
         sendTimeStart,
         sendTimeEnd,
         workdaysOnly,
@@ -1007,6 +1026,159 @@ export function NewBroadcastWizard({
                 </div>
               )}
 
+              {/* SEÇÃO: INTERVALO ENTRE DISPAROS (ANTI-BAN - 1 POR VEZ) */}
+              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                      <Label className="text-sm font-bold text-foreground">
+                        Intervalo Aleatório entre Disparos (Anti-Ban)
+                      </Label>
+                      <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px] py-0">
+                        1 por vez
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Os leads são acionados <strong>individualmente (um por vez)</strong>. O sistema sorteia um tempo aleatório
+                      dentro do intervalo abaixo antes de disparar o próximo, simulando o comportamento humano e protegendo a linha contra bloqueios.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  {/* Min delay */}
+                  <div className="p-3 rounded-lg bg-card/80 border border-border/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Delay Mínimo por Lead
+                      </Label>
+                      <span className="text-xs font-bold text-primary">{minDelayMinutes} min</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => {
+                          const next = Math.max(1, minDelayMinutes - 1);
+                          setMinDelayMinutes(next);
+                          if (maxDelayMinutes < next) setMaxDelayMinutes(next);
+                        }}
+                      >
+                        -
+                      </Button>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={minDelayMinutes}
+                        onChange={(e) => {
+                          const val = Math.max(1, parseInt(e.target.value) || 1);
+                          setMinDelayMinutes(val);
+                          if (maxDelayMinutes < val) setMaxDelayMinutes(val);
+                        }}
+                        className="h-8 text-center font-bold text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => {
+                          const next = minDelayMinutes + 1;
+                          setMinDelayMinutes(next);
+                          if (maxDelayMinutes < next) setMaxDelayMinutes(next);
+                        }}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Max delay */}
+                  <div className="p-3 rounded-lg bg-card/80 border border-border/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Delay Máximo por Lead
+                      </Label>
+                      <span className="text-xs font-bold text-primary">{maxDelayMinutes} min</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => setMaxDelayMinutes((prev) => Math.max(minDelayMinutes, prev - 1))}
+                      >
+                        -
+                      </Button>
+                      <Input
+                        type="number"
+                        min={minDelayMinutes}
+                        max={120}
+                        value={maxDelayMinutes}
+                        onChange={(e) => {
+                          const val = Math.max(minDelayMinutes, parseInt(e.target.value) || minDelayMinutes);
+                          setMaxDelayMinutes(val);
+                        }}
+                        className="h-8 text-center font-bold text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => setMaxDelayMinutes((prev) => prev + 1)}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preset quick buttons */}
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <span className="text-[11px] text-muted-foreground font-medium">Intervalos rápidos:</span>
+                  {[
+                    { min: 1, max: 2, label: "1 a 2 min (Rápido)" },
+                    { min: 3, max: 5, label: "3 a 5 min (Recomendado)", highlight: true },
+                    { min: 5, max: 8, label: "5 a 8 min (Alta Proteção)" },
+                  ].map((p) => {
+                    const isSelected = minDelayMinutes === p.min && maxDelayMinutes === p.max;
+                    return (
+                      <Button
+                        key={p.label}
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? "secondary" : "outline"}
+                        onClick={() => {
+                          setMinDelayMinutes(p.min);
+                          setMaxDelayMinutes(p.max);
+                        }}
+                        className={`h-6 text-[10px] px-2.5 ${
+                          isSelected
+                            ? "bg-amber-500/20 text-amber-700 border-amber-500/40 font-bold"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        {p.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <div className="text-[11px] text-muted-foreground bg-background/50 p-2 rounded-md border border-border/40 flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>
+                    Média de <strong>{((minDelayMinutes + maxDelayMinutes) / 2).toFixed(1)} minutos</strong> por contato.
+                    {" "}O tempo entre cada envio irá variar aleatoriamente de <strong>{minDelayMinutes} a {maxDelayMinutes} min</strong>.
+                  </span>
+                </div>
+              </div>
+
               {/* REAL-TIME PREVISION BOX (CRITICAL REQUIREMENT) */}
               <div className="p-4 rounded-xl border-2 border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent space-y-3">
                 <div className="flex items-center justify-between">
@@ -1138,6 +1310,10 @@ export function NewBroadcastWizard({
                   <div className="flex justify-between py-1 border-b border-border/30">
                     <span className="text-muted-foreground">Limite por Dia:</span>
                     <strong className="text-foreground">{scheduleCalc.dailyLimit} leads/dia</strong>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-border/30">
+                    <span className="text-muted-foreground">Intervalo Anti-Ban:</span>
+                    <strong className="text-amber-500 font-semibold">{minDelayMinutes} a {maxDelayMinutes} min (1 por vez)</strong>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-muted-foreground">Previsão Conclusão:</span>
