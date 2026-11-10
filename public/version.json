@@ -1,6 +1,6 @@
 {
-  "commit": "d7f39359429d7640162266250b52d89ed960b008",
-  "shortCommit": "d7f3935",
-  "message": "feat: add notification node, departments management and mobile push notification support",
-  "builtAt": "2026-11-09T23:57:29.411Z"
+  "commit": "d21f11873ed3371aa7b2b66b9742c8948532ab6e",
+  "shortCommit": "d21f118",
+  "message": "feat(workflows): adicionar campo de destino personalizado com variaveis em blocos de mensagem",
+  "builtAt": "2026-11-10T00:28:21.029Z"
 }

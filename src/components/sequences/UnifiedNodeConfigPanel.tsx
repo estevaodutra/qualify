@@ -4241,7 +4241,7 @@ export function UnifiedNodeConfigPanel({
                             <TooltipContent>
                               <p className="w-64 text-xs">
                                 Deixe em branco para usar o destino padrão do fluxo (grupos vinculados à pasta/campanha). 
-                                Se preencher com um ID de grupo ou variável (ex: {{group_id}} ou {{chat_id}}), a mensagem deste bloco será enviada exclusivamente para esse grupo.
+                                Se preencher com um ID de grupo ou variável (ex: {"{{group_id}}"} ou {"{{chat_id}}"}), a mensagem deste bloco será enviada exclusivamente para esse grupo.
                               </p>
                             </TooltipContent>
                           </Tooltip>
