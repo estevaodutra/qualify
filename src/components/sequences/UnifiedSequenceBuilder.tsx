@@ -235,6 +235,27 @@ export function UnifiedSequenceBuilder({
   const [isSendingManual, setIsSendingManual] = useState(false);
   const [nodeEditorOpen, setNodeEditorOpen] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const workflowHeaderRef = useRef<HTMLDivElement>(null);
+  const [workflowHeaderBottom, setWorkflowHeaderBottom] = useState(0);
+
+  useLayoutEffect(() => {
+    const header = workflowHeaderRef.current;
+    if (!header) return;
+
+    const updateHeaderBottom = () => {
+      setWorkflowHeaderBottom(Math.max(0, header.getBoundingClientRect().bottom));
+    };
+    updateHeaderBottom();
+    const observer = new ResizeObserver(updateHeaderBottom);
+    observer.observe(header);
+    window.addEventListener("resize", updateHeaderBottom);
+    window.addEventListener("scroll", updateHeaderBottom, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeaderBottom);
+      window.removeEventListener("scroll", updateHeaderBottom, true);
+    };
+  }, []);
 
   // Hover toolbar & delete confirmation
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -1126,7 +1147,7 @@ export function UnifiedSequenceBuilder({
     <div className="flex flex-col flex-1 min-h-0 h-full bg-[#F8F9FC] gap-5">
       
       {/* Header bar */}
-      <div className="flex justify-between items-center bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
+      <div ref={workflowHeaderRef} className="flex justify-between items-center bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={onBack} className="rounded-xl hover:bg-slate-50">
             <ArrowLeft className="h-4 w-4" />
@@ -2719,6 +2740,7 @@ export function UnifiedSequenceBuilder({
           }}
           nodeId={editingNodeId}
           activeTriggerId={editingTriggerId}
+          topOffset={workflowHeaderBottom}
           nodes={localNodes}
           connections={localConnections}
           onUpdateNodeConfig={(id, config) => {

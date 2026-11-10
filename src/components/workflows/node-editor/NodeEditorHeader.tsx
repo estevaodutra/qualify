@@ -37,27 +37,27 @@ export function NodeEditorHeader({
   isSimulating,
 }: NodeEditorHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b px-6 py-4 bg-white shrink-0">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-3 border-b px-4 py-3 bg-white shrink-0">
+      <div className="flex items-center gap-3 min-w-0">
         <div className="h-8 w-8 rounded-xl bg-[#8A3CFF]/10 flex items-center justify-center text-[#8A3CFF] font-bold text-sm shrink-0">
           {node.nodeType.substring(0, 2).toUpperCase()}
         </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-slate-800">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-semibold text-sm text-slate-800 truncate">
               {node.nodeType === "trigger" ? "Início / Gatilhos" : node.nodeType === "delay" ? "Delay / Espera" : ((node.config.label as string) || node.nodeType)}
             </span>
-            <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-5 font-bold text-slate-400">
+            <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-5 font-bold text-slate-400 shrink-0">
               {node.nodeType === "delay" ? "Delay" : node.nodeType === "trigger" ? "Gatilho" : node.nodeType}
             </Badge>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
+          <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
             {node.nodeType === "trigger" ? "Configuração dos gatilhos de entrada do fluxo." : node.nodeType === "delay" ? "Aguarde um tempo antes de continuar o fluxo." : "Editor de Etapa"}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Navigation - Previous */}
         {previousNodes.length > 0 && (
           previousNodes.length === 1 ? (

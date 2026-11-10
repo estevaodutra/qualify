@@ -3,17 +3,14 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { LocalNode } from "@/components/sequences/shared-types";
 import { NodeEditorHeader } from "./NodeEditorHeader";
-import { NodeInputPanel } from "./NodeInputPanel";
 import { NodeParametersPanel } from "./NodeParametersPanel";
-import { NodeOutputPanel } from "./NodeOutputPanel";
 import { normalizeDelayConfig } from "@/lib/workflows/delay";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { WebhookFieldMappings } from "@/components/group-campaigns/sequences/WebhookFieldMappings";
 import { FieldMappingEditor } from "@/components/workflows/nodes/field-mapping/FieldMappingEditor";
-import { Sliders, Database, Play, Clock, UserPlus } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Play, Clock, UserPlus } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,6 +54,7 @@ interface NodeEditorModalProps {
   onManualSendNode?: (node: LocalNode) => Promise<void>;
   activeTriggerId?: string;
   onDeleteConnection?: (sourceNodeId: string, conditionPath: string) => void;
+  topOffset?: number;
 }
 
 export function NodeEditorModal({
@@ -76,6 +74,7 @@ export function NodeEditorModal({
   onManualSendNode,
   activeTriggerId,
   onDeleteConnection,
+  topOffset = 0,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
   const node = nodes.find((n) => n.id === currentNodeId);
@@ -121,7 +120,7 @@ export function NodeEditorModal({
   const [lastLoadedSubId, setLastLoadedSubId] = useState<string | null>(null);
   const [wasOpen, setWasOpen] = useState(false);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
-  const [mockData, setMockData] = useState<any>({
+  const [mockData] = useState<any>({
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -140,7 +139,6 @@ export function NodeEditorModal({
     raw: {}
   });
   const [isSimulating, setIsSimulating] = useState(false);
-  const [activeMainTab, setActiveMainTab] = useState<"config" | "input" | "output">("config");
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
 
@@ -210,10 +208,6 @@ export function NodeEditorModal({
       setIsSendingManual(false);
     }
   };
-
-  useEffect(() => {
-    setActiveMainTab("config");
-  }, [currentNodeId]);
 
   useEffect(() => {
     if (nodeId) setCurrentNodeId(nodeId);
@@ -531,8 +525,7 @@ export function NodeEditorModal({
       }
 
       if (hasIncomingConnections && !stepInput) {
-        toast.warning("Falta de dados de entrada. Selecione 'Input' para verificar.");
-        setActiveMainTab("input");
+        toast.warning("Faltam dados de entrada. Execute as etapas anteriores primeiro.");
         setIsSimulating(false);
         return;
       }
@@ -547,7 +540,6 @@ export function NodeEditorModal({
         },
       }));
       toast.success("Esta etapa foi executada com sucesso!");
-      setActiveMainTab("output");
     } catch (err: any) {
       console.error(err);
       setSimulatedData((prev) => ({
@@ -560,7 +552,6 @@ export function NodeEditorModal({
         },
       }));
       toast.error(`Erro ao executar etapa: ${err.message}`);
-      setActiveMainTab("output");
     } finally {
       setIsSimulating(false);
     }
@@ -575,7 +566,6 @@ export function NodeEditorModal({
     setCurrentNodeId(targetId);
   };
 
-  const currentSimData = simulatedData[currentNodeId] || { input: null, output: null, status: "not_run" };
   const incomingConnections = connections.filter((c) => c.target_node_id === currentNodeId || c.to === currentNodeId);
   const hasIncomingConnections = incomingConnections.length > 0;
 
@@ -585,6 +575,7 @@ export function NodeEditorModal({
         <SheetContent 
           side="left"
           hideOverlay={true}
+          style={{ top: topOffset, height: `calc(100dvh - ${topOffset}px)` }}
           className="w-full sm:max-w-[450px] p-0 gap-0 flex flex-col border-r bg-white shadow-2xl transition-transform duration-300 outline-none [&>button]:hidden z-[100]"
           onPointerDownOutside={(e) => {
             e.preventDefault();
@@ -765,54 +756,19 @@ export function NodeEditorModal({
               })()}
             </div>
           ) : (
-            <Tabs value={activeMainTab} onValueChange={(v: any) => setActiveMainTab(v)} className="flex-1 flex flex-col min-h-0">
-              <div className="px-4 py-2 border-b bg-slate-50/50 flex items-center shrink-0 w-full overflow-hidden">
-                <TabsList className="h-auto p-1 rounded-xl bg-slate-100 border flex flex-wrap justify-start w-full gap-1">
-                  <TabsTrigger value="config" className="h-7 text-[10px] sm:text-xs rounded-lg px-2 sm:px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <Sliders className="h-3 w-3 text-[#8A3CFF]" /> Configuração
-                  </TabsTrigger>
-                  <TabsTrigger value="input" className="h-7 text-[10px] sm:text-xs rounded-lg px-2 sm:px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <Database className="h-3 w-3 text-[#8A3CFF]" /> Entrada (Input)
-                  </TabsTrigger>
-                  <TabsTrigger value="output" className="h-7 text-[10px] sm:text-xs rounded-lg px-2 sm:px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <Database className="h-3 w-3 text-[#8A3CFF]" /> Saída (Output)
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-                <TabsContent value="config" className="m-0 p-0 focus-visible:ring-0">
-                  <NodeParametersPanel
-                    node={{ ...node, config: localConfig }}
-                    onUpdate={handleUpdateConfig}
-                    mode={mode}
-                    isGroup={isGroup}
-                    nodes={nodes}
-                    connections={connections}
-                    onDeleteConnection={onDeleteConnection}
-                    onManualSend={handleManualSend}
-                    isSendingManual={isSendingManual}
-                  />
-                </TabsContent>
-                <TabsContent value="input" className="m-0 p-0 focus-visible:ring-0">
-                  <NodeInputPanel
-                    inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
-                    mockData={toCanonicalPayload(mockData)}
-                    onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
-                    onRunPrevious={handleRunPrevious}
-                    hasIncomingConnections={hasIncomingConnections}
-                  />
-                </TabsContent>
-                <TabsContent value="output" className="m-0 p-0 focus-visible:ring-0">
-                  <NodeOutputPanel
-                    outputData={currentSimData.output}
-                    status={currentSimData.status}
-                    errorText={currentSimData.error}
-                    onRunNode={handleRunStep}
-                  />
-                </TabsContent>
-              </div>
-            </Tabs>
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-50/30">
+              <NodeParametersPanel
+                node={{ ...node, config: localConfig }}
+                onUpdate={handleUpdateConfig}
+                mode={mode}
+                isGroup={isGroup}
+                nodes={nodes}
+                connections={connections}
+                onDeleteConnection={onDeleteConnection}
+                onManualSend={handleManualSend}
+                isSendingManual={isSendingManual}
+              />
+            </div>
           )}
         </SheetContent>
       </Sheet>
