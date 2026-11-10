@@ -70,8 +70,8 @@ export interface UnifiedSequenceBuilderProps {
   workflowConfig?: Record<string, unknown>;
 }
 
-const RANDOMIZER_PORT_BASE_Y = 28;
-const RANDOMIZER_PORT_SPACING = 22;
+const RANDOMIZER_PORT_BASE_Y = 124;
+const RANDOMIZER_PORT_SPACING = 30;
 
 function getSortedRandomizerBranches(node: LocalNode): RandomizerBranch[] {
   return ((node.config.branches as RandomizerBranch[] | undefined) || [])
@@ -1458,7 +1458,7 @@ export function UnifiedSequenceBuilder({
 
                   const isCondition = node.nodeType === "condition";
                   const isRandomizer = node.nodeType === "randomizer";
-                  const randomizerBranches = (node.config.branches as RandomizerBranch[]) || [];
+                  const randomizerBranches = getSortedRandomizerBranches(node);
                   const isFieldOp = node.nodeType === "field_op";
                   const fieldOpMappings = (node.config.mappings as any[]) || [];
                   const isTrigger = node.nodeType === "trigger";
@@ -1479,7 +1479,9 @@ export function UnifiedSequenceBuilder({
                         left: posX,
                         top: posY,
                         width: 320,
-                        minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
+                        minHeight: isRandomizer
+                          ? RANDOMIZER_PORT_BASE_Y + Math.max(0, randomizerBranches.length - 1) * RANDOMIZER_PORT_SPACING + 28
+                          : undefined,
                         pointerEvents: "auto"
                       }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node)}

@@ -398,7 +398,7 @@ export function ExecutionCanvas({
                 <div
                   key={node.id}
                   data-node-wrapper={node.id}
-                  style={{ position: "absolute", left: posX, top: posY, width: node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220, pointerEvents: "auto" }}
+                  style={{ position: "absolute", left: posX, top: posY, width: 320, pointerEvents: "auto" }}
                   onClick={() => nodeExec && onSelectNode(node.id)}
                   className={cn(
                     "rounded-xl border-2 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-all duration-200",
