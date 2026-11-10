@@ -452,13 +452,34 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toast({ title: "Chamada em andamento", description: "Encerre a chamada atual antes de discar novamente." });
         return false;
       }
-      if (!isPrimaryTab || !webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
+      if (!isPrimaryTab) {
         toast({
-          title: "Webphone offline",
-          description: "Fique online no Webphone antes de realizar a ligação.",
+          title: "Webphone ativo em outra aba",
+          description: "Assuma o controle do Webphone nesta aba antes de realizar a ligação.",
           variant: "destructive",
         });
         return false;
+      }
+
+      if (!webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
+        if (!hasSipConfig) {
+          toast({
+            title: "Webphone não configurado",
+            description: "Configure o ramal em Configurações de Telefonia antes de realizar a ligação.",
+            variant: "destructive",
+          });
+          return false;
+        }
+
+        const connected = await connectSIP();
+        if (!connected || !webphoneRef.current?.getUserAgent()?.isRegistered?.()) {
+          toast({
+            title: "Webphone offline",
+            description: "Não foi possível registrar o ramal SIP. Verifique as Configurações de Telefonia.",
+            variant: "destructive",
+          });
+          return false;
+        }
       }
 
       if (!operator?.id) {
@@ -525,7 +546,7 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return false;
       }
     },
-    [isPrimaryTab, operator?.id, cleanupCall, toast]
+    [isPrimaryTab, hasSipConfig, connectSIP, operator?.id, cleanupCall, toast]
   );
 
   // 5. Desligar Chamada
