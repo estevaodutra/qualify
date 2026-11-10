@@ -107,24 +107,45 @@ export function CustomFieldsTab() {
     if (!activeCompany?.id) return;
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("custom_fields_metadata")
         .select("*, custom_field_options(*)")
         .eq("company_id", activeCompany.id)
         .order("order_index", { ascending: true })
         .order("created_at", { ascending: true });
 
+      // Backward compatibility: production DB may not have the new registry
+      // columns yet while the migration is being rolled out.
+      if (error && /order_index/i.test(error.message || "")) {
+        const fallback = await supabase
+          .from("custom_fields_metadata")
+          .select("*, custom_field_options(*)")
+          .eq("company_id", activeCompany.id)
+          .order("created_at", { ascending: true });
+        data = fallback.data as any;
+        error = fallback.error as any;
+      }
+
       if (error) throw error;
 
       if (!data || data.length === 0) {
         try {
           await (supabase as any).rpc("seed_crm_system_fields", { p_company_id: activeCompany.id });
-          const { data: seeded } = await supabase
+          let seededQuery = await supabase
             .from("custom_fields_metadata")
             .select("*, custom_field_options(*)")
             .eq("company_id", activeCompany.id)
             .order("order_index", { ascending: true });
-          setFields((seeded || []) as CustomFieldMetadata[]);
+
+          if (seededQuery.error && /order_index/i.test(seededQuery.error.message || "")) {
+            seededQuery = await supabase
+              .from("custom_fields_metadata")
+              .select("*, custom_field_options(*)")
+              .eq("company_id", activeCompany.id)
+              .order("created_at", { ascending: true }) as any;
+          }
+
+          setFields((seededQuery.data || []) as CustomFieldMetadata[]);
         } catch {
           setFields([]);
         }
