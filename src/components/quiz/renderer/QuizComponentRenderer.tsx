@@ -79,30 +79,43 @@ const RedirectComponent: React.FC<{
   const description = (config.description as string) ?? "";
   const showTitle = (config.showTitle as boolean) ?? true;
   const showProgress = (config.showProgress as boolean) ?? true;
+  const barColor = (config.barColor as string) || (config.buttonColor as string) || primaryColor || "#4f46e5";
 
-  const [progress, setProgress] = React.useState(0);
+  const barRef = React.useRef<HTMLDivElement>(null);
+  const pctTextRef = React.useRef<HTMLSpanElement>(null);
   const hasTriggeredRef = React.useRef(false);
 
   React.useEffect(() => {
     let animationFrameId: number;
     let delayTimeoutId: NodeJS.Timeout;
+    let loopTimeoutId: NodeJS.Timeout;
     hasTriggeredRef.current = false;
-    setProgress(0);
+
+    if (barRef.current) barRef.current.style.width = "0%";
+    if (pctTextRef.current) pctTextRef.current.textContent = "0%";
 
     const startTime = Date.now() + delaySeconds * 1000;
-    const totalTimeMs = durationSeconds * 1000;
+    const totalTimeMs = Math.max(500, durationSeconds * 1000);
 
     const tick = () => {
       const now = Date.now();
       if (now < startTime) {
-        setProgress(0);
+        if (barRef.current) barRef.current.style.width = "0%";
+        if (pctTextRef.current) pctTextRef.current.textContent = "0%";
         animationFrameId = requestAnimationFrame(tick);
         return;
       }
 
       const elapsed = now - startTime;
       const pct = Math.min(100, (elapsed / totalTimeMs) * 100);
-      setProgress(pct);
+
+      // Sincronização instantânea e síncrona: barra e porcentagem no mesmo frame, sem delay CSS
+      if (barRef.current) {
+        barRef.current.style.width = `${pct}%`;
+      }
+      if (pctTextRef.current) {
+        pctTextRef.current.textContent = `${Math.round(pct)}%`;
+      }
 
       if (pct < 100) {
         animationFrameId = requestAnimationFrame(tick);
@@ -126,6 +139,14 @@ const RedirectComponent: React.FC<{
             } else {
               onOptionSelect?.(buttonIdName, destination);
             }
+          } else {
+            // No modo editor: pausa 1.5s e reinicia para que o usuário possa ver a animação contínua
+            loopTimeoutId = setTimeout(() => {
+              hasTriggeredRef.current = false;
+              if (barRef.current) barRef.current.style.width = "0%";
+              if (pctTextRef.current) pctTextRef.current.textContent = "0%";
+              animationFrameId = requestAnimationFrame(tick);
+            }, 1500);
           }
         }
       }
@@ -137,6 +158,7 @@ const RedirectComponent: React.FC<{
 
     return () => {
       clearTimeout(delayTimeoutId);
+      clearTimeout(loopTimeoutId);
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, [delaySeconds, durationSeconds, navigationType, destination, externalUrl, isEditor, componentId]);
@@ -154,15 +176,18 @@ const RedirectComponent: React.FC<{
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs font-semibold px-0.5">
             <span className="text-[11px] text-muted-foreground opacity-80">Progresso</span>
-            <span className="text-xs font-bold text-foreground">{Math.round(progress)}%</span>
+            <span ref={pctTextRef} className="text-xs font-bold text-foreground tabular-nums">
+              0%
+            </span>
           </div>
-          <div className="w-full h-3.5 bg-muted rounded-full overflow-hidden p-0.5 border border-border/40">
+          <div className="w-full h-3.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
             <div
+              ref={barRef}
               style={{
-                width: `${progress}%`,
-                backgroundColor: primaryColor,
+                width: "0%",
+                backgroundColor: barColor,
               }}
-              className="h-full rounded-full transition-all duration-75 ease-linear"
+              className="h-full rounded-full transition-none"
             />
           </div>
         </div>
@@ -187,6 +212,7 @@ interface ComponentRendererProps {
   isEditor?: boolean;
   isSelected?: boolean;
   submitting?: boolean;
+  dragHandleProps?: Record<string, any>;
   onFormChange?: (val: string) => void;
   onOptionSelect?: (optId: string, destination: string | null) => void;
   onNext?: (clickedId?: string) => void;
@@ -207,6 +233,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
   isEditor = false,
   isSelected = false,
   submitting = false,
+  dragHandleProps,
   onFormChange,
   onOptionSelect,
   onNext,
@@ -661,33 +688,17 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
         isEditor && isSelected && "ring-2 ring-indigo-600 shadow-sm"
       )}
     >
-      {/* Action Toolbar on Component Hover/Select (Mover, Duplicar, Excluir) */}
+      {/* Action Toolbar on Component Hover/Select (Arrastar Drag&Drop, Duplicar, Excluir) */}
       {isEditor && isSelected && (
         <div className="absolute top-1 right-1 z-50 flex items-center bg-card border border-indigo-300 shadow-md rounded-md px-1.5 py-0.5 text-xs gap-1 select-none animate-in fade-in zoom-in-95 duration-150">
-          {/* 1. Mover (Reordenar) */}
-          <div className="flex items-center border-r border-border pr-1 gap-0.5">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMoveUp?.(component.id);
-              }}
-              className="p-1 hover:bg-indigo-50 rounded text-slate-600 hover:text-indigo-600 transition-colors"
-              title="Mover para Cima"
-            >
-              <ArrowUp className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMoveDown?.(component.id);
-              }}
-              className="p-1 hover:bg-indigo-50 rounded text-slate-600 hover:text-indigo-600 transition-colors"
-              title="Mover para Baixo"
-            >
-              <ArrowDown className="w-3.5 h-3.5" />
-            </button>
+          {/* 1. Drag & Drop Handle */}
+          <div
+            {...dragHandleProps}
+            className="flex items-center justify-center p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-grab active:cursor-grabbing border-r border-border pr-1"
+            title="Arrastar para reordenar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="w-3.5 h-3.5" />
           </div>
 
           {/* 2. Duplicar */}

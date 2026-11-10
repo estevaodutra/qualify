@@ -1,6 +1,6 @@
 {
-  "commit": "9526f229e6879b45433077ca87f4eec5883146cb",
-  "shortCommit": "9526f22",
-  "message": "Remove nome generico e mostra destino nos nodes de negocio",
-  "builtAt": "2026-11-10T17:31:44.792Z"
+  "commit": "6ffb97599a38ea5987dc722d42912a846452342f",
+  "shortCommit": "6ffb975",
+  "message": "feat(broadcasts): selecao de multiplos grupos e extracao direta ignorando admins",
+  "builtAt": "2026-11-10T18:21:34.047Z"
 }

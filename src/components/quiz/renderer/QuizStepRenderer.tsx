@@ -4,6 +4,23 @@ import { QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
 import { QuizComponentRenderer } from "./QuizComponentRenderer";
 import { ArrowLeft } from "lucide-react";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface StepRendererProps {
   step: QuizStep;
@@ -22,6 +39,37 @@ interface StepRendererProps {
   onNextStep?: (clickedId?: string) => void;
   onPrevStep?: () => void;
   onSelectComponent?: (id: string) => void;
+}
+
+function SortableStepComponentItem({
+  component,
+  children,
+}: {
+  component: QuizComponent;
+  children: (dragHandleProps: Record<string, any>) => React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: component.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.6 : 1,
+    position: "relative",
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? "shadow-lg ring-2 ring-indigo-500 rounded-lg" : ""}>
+      {children({ ...attributes, ...listeners })}
+    </div>
+  );
 }
 
 export const QuizStepRenderer: React.FC<StepRendererProps> = ({
@@ -49,6 +97,28 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
   const duplicateComponent = useQuizBuilderStore((s) => s.duplicateComponent);
   const deleteComponent = useQuizBuilderStore((s) => s.deleteComponent);
   const reorderComponents = useQuizBuilderStore((s) => s.reorderComponents);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = components.findIndex((c) => c.id === active.id);
+    const newIndex = components.findIndex((c) => c.id === over.id);
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove(components, oldIndex, newIndex);
+      reorderComponents(step.id, reordered.map((c) => c.id));
+    }
+  };
 
   const handleMoveUp = (id: string) => {
     const ids = components.map((c) => c.id);
@@ -82,6 +152,30 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
     boxShadow: d.cardEnabled && d.cardShadow !== "none" ? "0 10px 25px -5px rgba(0, 0, 0, 0.1)" : "none",
     padding: `${d.cardPadding || 24}px`,
   };
+
+  const renderComponentItem = (comp: QuizComponent, dragHandleProps?: Record<string, any>) => (
+    <QuizComponentRenderer
+      key={comp.id}
+      component={comp}
+      formValue={formValues[comp.id] || ""}
+      selectedOptions={selectedOptions[comp.id] || []}
+      primaryColor={d.primaryColor || "#6366f1"}
+      borderRadius={borderRadius}
+      validationError={validationErrors[comp.id]}
+      isEditor={isEditor}
+      isSelected={comp.id === activeComponentId}
+      submitting={submitting}
+      dragHandleProps={dragHandleProps}
+      onFormChange={(val) => onFormChange?.(comp.id, val)}
+      onOptionSelect={(optId, destination) => onOptionSelect?.(comp.id, optId, destination)}
+      onNext={(clickedId) => onNextStep?.(clickedId)}
+      onSelectComponent={onSelectComponent}
+      onDuplicateComponent={(id) => duplicateComponent(id)}
+      onDeleteComponent={(id) => deleteComponent(id)}
+      onMoveUp={(id) => handleMoveUp(id)}
+      onMoveDown={(id) => handleMoveDown(id)}
+    />
+  );
 
   return (
     <div className="w-full flex flex-col items-center justify-center my-auto transition-all">
@@ -131,29 +225,18 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
             <div className="py-12 text-center text-xs text-muted-foreground border-2 border-dashed border-muted/50 rounded-lg">
               Etapa sem componentes. Arraste ou clique nos itens da biblioteca lateral para adicionar.
             </div>
+          ) : isEditor ? (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={components.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                {components.map((comp) => (
+                  <SortableStepComponentItem key={comp.id} component={comp}>
+                    {(dragHandleProps) => renderComponentItem(comp, dragHandleProps)}
+                  </SortableStepComponentItem>
+                ))}
+              </SortableContext>
+            </DndContext>
           ) : (
-            components.map((comp) => (
-              <QuizComponentRenderer
-                key={comp.id}
-                component={comp}
-                formValue={formValues[comp.id] || ""}
-                selectedOptions={selectedOptions[comp.id] || []}
-                primaryColor={d.primaryColor || "#6366f1"}
-                borderRadius={borderRadius}
-                validationError={validationErrors[comp.id]}
-                isEditor={isEditor}
-                isSelected={comp.id === activeComponentId}
-                submitting={submitting}
-                onFormChange={(val) => onFormChange?.(comp.id, val)}
-                onOptionSelect={(optId, destination) => onOptionSelect?.(comp.id, optId, destination)}
-                onNext={(clickedId) => onNextStep?.(clickedId)}
-                onSelectComponent={onSelectComponent}
-                onDuplicateComponent={(id) => duplicateComponent(id)}
-                onDeleteComponent={(id) => deleteComponent(id)}
-                onMoveUp={(id) => handleMoveUp(id)}
-                onMoveDown={(id) => handleMoveDown(id)}
-              />
-            ))
+            components.map((comp) => renderComponentItem(comp))
           )}
         </div>
       </div>
