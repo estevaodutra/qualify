@@ -76,6 +76,7 @@ interface ExtractionResult {
   groupName: string;
   total: number;
   extracted: number;
+  updated: number;
   ignored: number;
   invalid: number;
 }
@@ -163,10 +164,11 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
         (acc, r) => ({
           total: acc.total + r.total,
           extracted: acc.extracted + r.extracted,
+          updated: acc.updated + r.updated,
           ignored: acc.ignored + r.ignored,
           invalid: acc.invalid + r.invalid,
         }),
-        { total: 0, extracted: 0, ignored: 0, invalid: 0 }
+        { total: 0, extracted: 0, updated: 0, ignored: 0, invalid: 0 }
       ),
     [importResults]
   );
@@ -398,81 +400,184 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
 
     const allResults: ExtractionResult[] = [];
     let totalExtracted = 0;
+    let totalUpdated = 0;
     const groupEntries = Array.from(groupMap.entries());
 
     for (let gi = 0; gi < groupEntries.length; gi++) {
       const [jid, members] = groupEntries[gi];
       const groupName = members[0]?.groupName || jid;
-      const result: ExtractionResult = { groupName, total: members.length, extracted: 0, ignored: 0, invalid: 0 };
+      const result: ExtractionResult = { groupName, total: members.length, extracted: 0, updated: 0, ignored: 0, invalid: 0 };
 
-      const toInsert: any[] = [];
-      for (const member of members) {
-        if (existingPhones.has(member.phone)) {
+      // Coletar telefones dos membros deste grupo (excluindo os já na campanha se ignoreCampaignExisting estiver ativo)
+      const candidateMembers: ExtractedMember[] = [];
+      for (const m of members) {
+        if (existingPhones.has(m.phone)) {
           result.ignored++;
           continue;
         }
-
-        const leadData: any = {
-          user_id: user.id,
-          phone: member.phone,
-          name: member.name || null,
-          status: "active",
-          source_type: "whatsapp_group",
-          tags: tags.length > 0 ? tags : [],
-          active_campaign_id: campaignId || null,
-          active_campaign_type: campaignType || null,
-        };
-
-        if (keepReference) {
-          // source_group_id é uuid, não pode receber JID string
-          leadData.source_group_name = groupName;
-        }
-
-        toInsert.push(leadData);
-        existingPhones.add(member.phone);
+        candidateMembers.push(m);
+        existingPhones.add(m.phone);
       }
 
-      // Batch upsert
-      if (toInsert.length > 0) {
-        const batchSize = 100;
-        for (let i = 0; i < toInsert.length; i += batchSize) {
-          const batch = toInsert.slice(i, i + batchSize);
-          const { data: upserted, error } = await supabase
+      if (candidateMembers.length > 0) {
+        const candidatePhones = candidateMembers.map((m) => m.phone);
+        const existingLeadsMap = new Map<string, { id: string; name: string | null; tags: string[]; source_group_name: string | null }>();
+
+        // Buscar leads já existentes no CRM (em batches para evitar limite de URL/IN)
+        const fetchBatchSize = 200;
+        for (let i = 0; i < candidatePhones.length; i += fetchBatchSize) {
+          const pBatch = candidatePhones.slice(i, i + fetchBatchSize);
+          let q = supabase
             .from("leads")
-            .upsert(batch, { onConflict: "phone,user_id", ignoreDuplicates: false })
-            .select("id, phone");
+            .select("id, phone, name, tags, source_group_name")
+            .in("phone", pBatch);
 
-          if (!error && upserted) {
-            result.extracted += upserted.length;
+          if (activeCompany?.id) {
+            q = q.eq("company_id", activeCompany.id);
+          } else {
+            q = q.eq("user_id", user.id);
+          }
 
-            if (campaignType === "ligacao") {
-              const rows = upserted.map((l) => ({
-                campaign_id: campaignId,
-                user_id: user.id,
-                phone: l.phone,
-                status: "pending",
-              }));
-              await supabase.from("call_leads").upsert(rows as any, { onConflict: "phone,campaign_id" });
+          const { data: found } = await q;
+          if (found) {
+            found.forEach((l: any) => {
+              if (l.phone) existingLeadsMap.set(l.phone, l);
+            });
+          }
+        }
+
+        const toInsert: any[] = [];
+        const toUpdate: { id: string; phone: string; updates: any }[] = [];
+
+        for (const member of candidateMembers) {
+          const existing = existingLeadsMap.get(member.phone);
+
+          if (existing) {
+            // Lead já existe no CRM: atualizar mantendo nome existente (se tiver) e combinando novas tags
+            const currentTags = Array.isArray(existing.tags) ? existing.tags : [];
+            const mergedTags = Array.from(new Set([...currentTags, ...tags]));
+
+            const updates: any = {
+              updated_at: new Date().toISOString(),
+            };
+
+            // Adiciona novas tags se houver
+            if (tags.length > 0) {
+              updates.tags = mergedTags;
             }
 
-            if (campaignType === "despacho") {
-              const rows = upserted.map((l) => ({
-                campaign_id: campaignId,
-                user_id: user.id,
-                lead_id: l.id,
-                status: "active",
-              }));
-              await supabase.from("dispatch_campaign_contacts").upsert(rows as any, { onConflict: "campaign_id,lead_id" });
+            // Se o lead não tinha nome no CRM e temos nome extraído, preenche
+            if (!existing.name && member.name) {
+              updates.name = member.name;
             }
-          } else if (error) {
-            console.error("[ExtractLeads] Upsert error:", error.message, error);
-            result.ignored += batch.length;
+
+            // Atualiza campanha se especificado
+            if (campaignId) {
+              updates.active_campaign_id = campaignId;
+              updates.active_campaign_type = campaignType || null;
+            }
+
+            if (keepReference && !existing.source_group_name) {
+              updates.source_group_name = groupName;
+            }
+
+            toUpdate.push({ id: existing.id, phone: member.phone, updates });
+          } else {
+            // Novo lead: inserir no CRM
+            const leadData: any = {
+              user_id: user.id,
+              company_id: activeCompany?.id || null,
+              phone: member.phone,
+              name: member.name || null,
+              status: "active",
+              source_type: "whatsapp_group",
+              tags: tags.length > 0 ? tags : [],
+              active_campaign_id: campaignId || null,
+              active_campaign_type: campaignType || null,
+            };
+
+            if (keepReference) {
+              leadData.source_group_name = groupName;
+            }
+
+            toInsert.push(leadData);
+          }
+        }
+
+        // Processar atualizações de leads já existentes
+        if (toUpdate.length > 0) {
+          for (const item of toUpdate) {
+            const { error: updError } = await supabase
+              .from("leads")
+              .update(item.updates)
+              .eq("id", item.id);
+
+            if (!updError) {
+              result.updated++;
+
+              if (campaignType === "ligacao" && campaignId) {
+                await supabase.from("call_leads").upsert(
+                  [{ campaign_id: campaignId, user_id: user.id, phone: item.phone, status: "pending" }] as any,
+                  { onConflict: "phone,campaign_id" }
+                );
+              }
+
+              if (campaignType === "despacho" && campaignId) {
+                await supabase.from("dispatch_campaign_contacts").upsert(
+                  [{ campaign_id: campaignId, user_id: user.id, lead_id: item.id, status: "active" }] as any,
+                  { onConflict: "campaign_id,lead_id" }
+                );
+              }
+            } else {
+              console.error("[ExtractLeads] Update error for lead", item.id, updError.message);
+              result.ignored++;
+            }
+          }
+        }
+
+        // Processar inserções de novos leads
+        if (toInsert.length > 0) {
+          const batchSize = 100;
+          for (let i = 0; i < toInsert.length; i += batchSize) {
+            const batch = toInsert.slice(i, i + batchSize);
+            const { data: upserted, error } = await supabase
+              .from("leads")
+              .insert(batch)
+              .select("id, phone");
+
+            if (!error && upserted) {
+              result.extracted += upserted.length;
+
+              if (campaignType === "ligacao" && campaignId) {
+                const rows = upserted.map((l) => ({
+                  campaign_id: campaignId,
+                  user_id: user.id,
+                  phone: l.phone,
+                  status: "pending",
+                }));
+                await supabase.from("call_leads").upsert(rows as any, { onConflict: "phone,campaign_id" });
+              }
+
+              if (campaignType === "despacho" && campaignId) {
+                const rows = upserted.map((l) => ({
+                  campaign_id: campaignId,
+                  user_id: user.id,
+                  lead_id: l.id,
+                  status: "active",
+                }));
+                await supabase.from("dispatch_campaign_contacts").upsert(rows as any, { onConflict: "campaign_id,lead_id" });
+              }
+            } else if (error) {
+              console.error("[ExtractLeads] Insert error:", error.message, error);
+              result.ignored += batch.length;
+            }
           }
         }
       }
 
       allResults.push(result);
       totalExtracted += result.extracted;
+      totalUpdated += result.updated;
       setImportProgress(Math.round(((gi + 1) / groupEntries.length) * 100));
     }
 
@@ -481,11 +586,18 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
 
     queryClient.invalidateQueries({ queryKey: ["leads"] });
     queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
     queryClient.invalidateQueries({ queryKey: ["call-leads"] });
     queryClient.invalidateQueries({ queryKey: ["dispatch_contacts"] });
 
-    toast.success(`${totalExtracted} leads importados com sucesso!`);
-  }, [user, extractedMembers, campaignId, campaignType, tags, keepReference, ignoreCampaignExisting, queryClient]);
+    if (totalUpdated > 0 && totalExtracted > 0) {
+      toast.success(`${totalExtracted} novos leads adicionados e ${totalUpdated} leads atualizados!`);
+    } else if (totalUpdated > 0) {
+      toast.success(`${totalUpdated} leads existentes atualizados com sucesso!`);
+    } else {
+      toast.success(`${totalExtracted} leads importados com sucesso!`);
+    }
+  }, [user, extractedMembers, campaignId, campaignType, tags, keepReference, ignoreCampaignExisting, queryClient, activeCompany]);
 
   // ── Toggle helpers ──
   const toggleGroup = (jid: string) => {
@@ -905,7 +1017,13 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
           <div className="space-y-4">
             <div className="text-center py-4">
               <div className="text-4xl mb-2">✅</div>
-              <p className="text-xl font-bold">{totalResults.extracted} leads importados</p>
+              <p className="text-xl font-bold">
+                {totalResults.extracted > 0 && totalResults.updated > 0
+                  ? `${totalResults.extracted} adicionados • ${totalResults.updated} atualizados`
+                  : totalResults.updated > 0
+                  ? `${totalResults.updated} leads atualizados`
+                  : `${totalResults.extracted} leads importados`}
+              </p>
               <p className="text-sm text-muted-foreground">com sucesso!</p>
             </div>
 
@@ -936,7 +1054,8 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
                   <TableRow>
                     <TableHead>Grupo</TableHead>
                     <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Importados</TableHead>
+                    <TableHead className="text-right">Novos</TableHead>
+                    <TableHead className="text-right">Atualizados</TableHead>
                     <TableHead className="text-right">Ignorados</TableHead>
                     <TableHead className="text-right">Inválidos</TableHead>
                   </TableRow>
@@ -947,6 +1066,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
                       <TableCell className="font-medium max-w-[180px] truncate">{r.groupName}</TableCell>
                       <TableCell className="text-right">{r.total}</TableCell>
                       <TableCell className="text-right text-green-500">{r.extracted}</TableCell>
+                      <TableCell className="text-right text-blue-500">{r.updated}</TableCell>
                       <TableCell className="text-right text-yellow-500">{r.ignored}</TableCell>
                       <TableCell className="text-right text-red-500">{r.invalid}</TableCell>
                     </TableRow>
@@ -955,6 +1075,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
                     <TableCell>TOTAL</TableCell>
                     <TableCell className="text-right">{totalResults.total}</TableCell>
                     <TableCell className="text-right text-green-500">{totalResults.extracted}</TableCell>
+                    <TableCell className="text-right text-blue-500">{totalResults.updated}</TableCell>
                     <TableCell className="text-right text-yellow-500">{totalResults.ignored}</TableCell>
                     <TableCell className="text-right text-red-500">{totalResults.invalid}</TableCell>
                   </TableRow>

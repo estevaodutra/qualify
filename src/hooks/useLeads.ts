@@ -403,17 +403,52 @@ export function useLeads(filters: LeadFilters = {}) {
         const { error } = await supabase.from("leads").insert(insertData as any);
 
         if (error) {
-          if (error.message.includes("duplicate") && updateExisting) {
+          if ((error.message.includes("duplicate") || error.code === "23505") && updateExisting) {
+            // Buscar tags e nome atuais para merge inteligente
+            let currentQuery = supabase
+              .from("leads")
+              .select("id, name, tags")
+              .eq("phone", lead.phone);
+
+            if (activeCompanyId) {
+              currentQuery = currentQuery.eq("company_id", activeCompanyId);
+            } else {
+              currentQuery = currentQuery.eq("user_id", user.id);
+            }
+
+            const { data: existingLead } = await currentQuery.maybeSingle();
+
+            const existingTags = Array.isArray(existingLead?.tags) ? existingLead.tags : [];
+            const mergedTags = Array.from(new Set([...existingTags, ...tags]));
+
             const updateData: Record<string, unknown> = {
-              name: lead.name || undefined,
-              email: lead.email || undefined,
-              tags,
+              tags: mergedTags,
+              updated_at: new Date().toISOString(),
             };
+
+            // Atualiza o nome apenas se o lead no CRM ainda não tiver nome ou se fornecido novo
+            if (lead.name && (!existingLead?.name || existingLead.name.trim() === "")) {
+              updateData.name = lead.name;
+            }
+            if (lead.email) {
+              updateData.email = lead.email;
+            }
+            if (lead.lid) {
+              updateData.lid = lead.lid;
+            }
             if (campaignId) {
               updateData.active_campaign_id = campaignId;
               updateData.active_campaign_type = campaignType;
             }
-            await supabase.from("leads").update(updateData as any).eq("phone", lead.phone).eq("user_id", user.id);
+
+            let updateQuery = supabase.from("leads").update(updateData as any).eq("phone", lead.phone);
+            if (activeCompanyId) {
+              updateQuery = updateQuery.eq("company_id", activeCompanyId);
+            } else {
+              updateQuery = updateQuery.eq("user_id", user.id);
+            }
+
+            await updateQuery;
             updated++;
           } else {
             skipped++;
@@ -436,7 +471,23 @@ export function useLeads(filters: LeadFilters = {}) {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
       queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
-      toast({ title: "Importação concluída" });
+
+      if (result.imported > 0 && result.updated > 0) {
+        toast({
+          title: "Importação concluída",
+          description: `${result.imported} novos leads adicionados e ${result.updated} leads atualizados!`,
+        });
+      } else if (result.updated > 0) {
+        toast({
+          title: "Importação concluída",
+          description: `${result.updated} leads existentes atualizados com sucesso!`,
+        });
+      } else {
+        toast({
+          title: "Importação concluída",
+          description: `${result.imported} leads importados com sucesso!`,
+        });
+      }
     },
     onError: () => toast({ title: "Erro na importação", variant: "destructive" }),
   });

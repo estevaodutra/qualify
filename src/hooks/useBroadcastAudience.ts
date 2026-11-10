@@ -28,7 +28,10 @@ export function useBroadcastAudience(filters: BroadcastAudienceFilters) {
       query = query.eq("status", filters.status);
     }
 
-    if (filters.sourceGroupName && filters.sourceGroupName !== "all") {
+    // Suporte a múltiplos grupos ou grupo único
+    if (filters.sourceGroupNames && filters.sourceGroupNames.length > 0) {
+      query = query.in("source_group_name", filters.sourceGroupNames);
+    } else if (filters.sourceGroupName && filters.sourceGroupName !== "all") {
       query = query.eq("source_group_name", filters.sourceGroupName);
     }
 
@@ -129,7 +132,7 @@ export function useBroadcastAudience(filters: BroadcastAudienceFilters) {
     enabled: !!user,
   });
 
-  // 4. Fetch available source groups for filter
+  // 4. Fetch available source groups for filter (from leads table + group_campaigns)
   const groupsQuery = useQuery({
     queryKey: ["broadcast_audience_groups", activeCompanyId],
     queryFn: async () => {
@@ -144,7 +147,7 @@ export function useBroadcastAudience(filters: BroadcastAudienceFilters) {
         query = query.eq("user_id", user.id);
       }
 
-      const { data, error } = await query.limit(500);
+      const { data, error } = await query.limit(1000);
       if (error) throw error;
 
       const groupSet = new Set<string>();
@@ -153,6 +156,21 @@ export function useBroadcastAudience(filters: BroadcastAudienceFilters) {
           groupSet.add(row.source_group_name.trim());
         }
       });
+
+      // Also include group_campaigns registered in CRM
+      try {
+        let gcQ = supabase.from("group_campaigns").select("name, group_name");
+        if (activeCompanyId) gcQ = gcQ.eq("company_id", activeCompanyId);
+        else if (user) gcQ = gcQ.eq("user_id", user.id);
+        const { data: gcData } = await gcQ.limit(500);
+        gcData?.forEach((g: any) => {
+          const gName = g.group_name || g.name;
+          if (gName?.trim()) groupSet.add(gName.trim());
+        });
+      } catch (_e) {
+        // Safe catch
+      }
+
       return Array.from(groupSet).sort();
     },
     enabled: !!user,

@@ -31,3 +31,6 @@ dist-ssr
 # Supabase
 supabase/.temp/
 .supabase/
+
+# Scratch & temp
+scratch/

@@ -56,10 +56,16 @@ import {
   ChevronRight,
   Layers,
   HelpCircle,
+  Download,
+  Check,
+  X,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ExtractGroupsDialog } from "./ExtractGroupsDialog";
 
 interface NewBroadcastWizardProps {
   open: boolean;
@@ -95,9 +101,13 @@ export function NewBroadcastWizard({
     status: "all",
     tags: [],
     sourceGroupName: "all",
+    sourceGroupNames: [],
     search: "",
   });
   const [deselectedLeadIds, setDeselectedLeadIds] = useState<Set<string>>(new Set());
+  const [groupsPopoverOpen, setGroupsPopoverOpen] = useState(false);
+  const [groupSearchQuery, setGroupSearchQuery] = useState("");
+  const [showExtractDialog, setShowExtractDialog] = useState(false);
 
   // Form State - Step 3: Cadence & Anti-Ban
   const [distributionMode, setDistributionMode] = useState<BroadcastDistributionMode>("daily_limit");
@@ -192,14 +202,60 @@ export function NewBroadcastWizard({
       setDescription("");
       setWorkflowId("");
       setInstanceId("default");
-      setFilters({ status: "all", tags: [], sourceGroupName: "all", search: "" });
+      setFilters({ status: "all", tags: [], sourceGroupName: "all", sourceGroupNames: [], search: "" });
       setDeselectedLeadIds(new Set());
       setDistributionMode("daily_limit");
       setDailyLimit(10);
       setWorkdaysOnly(true);
       setStartDateStr(new Date().toISOString().split("T")[0]);
+      setGroupSearchQuery("");
+      setGroupsPopoverOpen(false);
     }
   }, [open]);
+
+  // Handlers for multiple group selection
+  const toggleGroupSelection = (groupName: string) => {
+    setFilters((prev) => {
+      const currentList = prev.sourceGroupNames || [];
+      const exists = currentList.includes(groupName);
+      const updated = exists
+        ? currentList.filter((g) => g !== groupName)
+        : [...currentList, groupName];
+      return {
+        ...prev,
+        sourceGroupNames: updated,
+        sourceGroupName: updated.length === 1 ? updated[0] : (updated.length > 1 ? "multiple" : "all"),
+      };
+    });
+  };
+
+  const removeGroupSelection = (groupName: string) => {
+    setFilters((prev) => {
+      const currentList = prev.sourceGroupNames || [];
+      const updated = currentList.filter((g) => g !== groupName);
+      return {
+        ...prev,
+        sourceGroupNames: updated,
+        sourceGroupName: updated.length === 1 ? updated[0] : (updated.length > 1 ? "multiple" : "all"),
+      };
+    });
+  };
+
+  const clearAllGroups = () => {
+    setFilters((prev) => ({
+      ...prev,
+      sourceGroupNames: [],
+      sourceGroupName: "all",
+    }));
+  };
+
+  const selectAllGroups = () => {
+    setFilters((prev) => ({
+      ...prev,
+      sourceGroupNames: [...availableGroups],
+      sourceGroupName: "multiple",
+    }));
+  };
 
   // Handlers for audience selection
   const toggleTagFilter = (tag: string) => {
@@ -500,25 +556,198 @@ export function NewBroadcastWizard({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Grupo de Origem</Label>
-                  <Select
-                    value={filters.sourceGroupName || "all"}
-                    onValueChange={(val) => setFilters((prev) => ({ ...prev, sourceGroupName: val }))}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Todos os grupos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os grupos</SelectItem>
-                      {availableGroups.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Users className="w-3 h-3 text-primary" />
+                      Grupos de Origem
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => setShowExtractDialog(true)}
+                      className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" />
+                      Extrair Grupos
+                    </button>
+                  </div>
+
+                  {/* Multi-Select Popover para Selecionar Múltiplos Grupos */}
+                  <Popover open={groupsPopoverOpen} onOpenChange={setGroupsPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between h-8 text-xs px-2.5 font-normal border-border/60 hover:border-primary/50"
+                      >
+                        <span className="truncate">
+                          {!filters.sourceGroupNames || filters.sourceGroupNames.length === 0 ? (
+                            <span className="text-muted-foreground">Todos os grupos</span>
+                          ) : filters.sourceGroupNames.length === 1 ? (
+                            filters.sourceGroupNames[0]
+                          ) : (
+                            `${filters.sourceGroupNames.length} grupos selecionados`
+                          )}
+                        </span>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground rotate-90 shrink-0 opacity-50 ml-1" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-72 p-2 rounded-xl border border-border/60 bg-popover/95 backdrop-blur-xl shadow-xl space-y-2 z-[9999]"
+                    >
+                      <div className="flex items-center justify-between pb-1 border-b border-border/40">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-primary" />
+                          Selecionar Grupos
+                        </span>
+                        <div className="flex items-center gap-1 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={selectAllGroups}
+                            className="text-primary hover:underline font-semibold cursor-pointer text-[10px]"
+                          >
+                            Todos
+                          </button>
+                          <span className="text-muted-foreground">•</span>
+                          <button
+                            type="button"
+                            onClick={clearAllGroups}
+                            className="text-muted-foreground hover:text-foreground cursor-pointer text-[10px]"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Busca rápida de grupos */}
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar grupo..."
+                          value={groupSearchQuery}
+                          onChange={(e) => setGroupSearchQuery(e.target.value)}
+                          className="pl-7 h-7 text-xs rounded-md border-border/40"
+                        />
+                      </div>
+
+                      {/* Lista de grupos com checkboxes */}
+                      <div className="max-h-52 overflow-y-auto space-y-1 pt-1 scrollbar-thin">
+                        {availableGroups.length === 0 ? (
+                          <div className="text-center py-4 text-[11px] text-muted-foreground space-y-1.5">
+                            <p>Nenhum grupo com leads no CRM.</p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setGroupsPopoverOpen(false);
+                                setShowExtractDialog(true);
+                              }}
+                              className="h-6 text-[10px] gap-1 px-2"
+                            >
+                              <Download className="w-3 h-3" /> Extrair agora
+                            </Button>
+                          </div>
+                        ) : (
+                          availableGroups
+                            .filter((g) =>
+                              g.toLowerCase().includes(groupSearchQuery.toLowerCase())
+                            )
+                            .map((groupName) => {
+                              const isChecked = (filters.sourceGroupNames || []).includes(groupName);
+                              return (
+                                <div
+                                  key={groupName}
+                                  onClick={() => toggleGroupSelection(groupName)}
+                                  className={`flex items-center justify-between p-1.5 rounded-lg text-xs cursor-pointer transition-all hover:bg-muted/50 ${
+                                    isChecked ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate pr-2">
+                                    <div
+                                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                        isChecked
+                                          ? "bg-primary border-primary text-primary-foreground"
+                                          : "border-border"
+                                      }`}
+                                    >
+                                      {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                    </div>
+                                    <span className="truncate">{groupName}</span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setGroupsPopoverOpen(false);
+                            setShowExtractDialog(true);
+                          }}
+                          className="h-7 text-[11px] text-primary gap-1 px-2"
+                        >
+                          <Download className="w-3 h-3" /> Extrair Novos
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => setGroupsPopoverOpen(false)}
+                          className="h-7 text-[11px] px-3 font-semibold"
+                        >
+                          Concluir
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
+
+              {/* Badges de Grupos Selecionados */}
+              {filters.sourceGroupNames && filters.sourceGroupNames.length > 0 && (
+                <div className="space-y-1 bg-muted/20 p-2.5 rounded-lg border border-border/50">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-muted-foreground flex items-center gap-1">
+                      <Users className="w-3 h-3 text-primary" />
+                      {filters.sourceGroupNames.length} grupo(s) selecionado(s) para o disparo:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearAllGroups}
+                      className="text-muted-foreground hover:text-foreground text-[10px] cursor-pointer"
+                    >
+                      Remover todos
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pt-1">
+                    {filters.sourceGroupNames.map((gName) => (
+                      <Badge
+                        key={gName}
+                        variant="secondary"
+                        className="text-[11px] py-0.5 pl-2 pr-1.5 gap-1 bg-primary/10 text-primary border border-primary/20 flex items-center"
+                      >
+                        <span className="truncate max-w-[200px]">{gName}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeGroupSelection(gName);
+                          }}
+                          className="hover:bg-primary/20 rounded-full p-0.5 cursor-pointer ml-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Tag filters */}
               {availableTags.length > 0 && (
@@ -999,6 +1228,27 @@ export function NewBroadcastWizard({
           </div>
         </DialogFooter>
       </DialogContent>
+
+      {/* Modal de Extração de Múltiplos Grupos para o CRM */}
+      <ExtractGroupsDialog
+        open={showExtractDialog}
+        onOpenChange={setShowExtractDialog}
+        defaultInstanceId={instanceId}
+        onExtractionComplete={(res) => {
+          if (res.groupNames && res.groupNames.length > 0) {
+            setFilters((prev) => {
+              const current = prev.sourceGroupNames || [];
+              const combined = Array.from(new Set([...current, ...res.groupNames]));
+              return {
+                ...prev,
+                sourceGroupNames: combined,
+                sourceGroupName: combined.length === 1 ? combined[0] : "multiple",
+              };
+            });
+            setShowExtractDialog(false);
+          }
+        }}
+      />
     </Dialog>
   );
 }

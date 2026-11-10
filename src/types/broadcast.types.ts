@@ -11,7 +11,8 @@ export type BroadcastDistributionMode = "immediate" | "daily_limit";
 export interface BroadcastAudienceFilters {
   status?: string;
   tags?: string[];
-  sourceGroupName?: string;
+  sourceGroupName?: string; // Mantido para retrocompatibilidade
+  sourceGroupNames?: string[]; // Suporte a múltiplos grupos
   sourceType?: string;
   search?: string;
   excludedLeadIds?: string[];
