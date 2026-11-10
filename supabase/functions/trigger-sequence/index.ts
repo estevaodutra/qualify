@@ -509,22 +509,120 @@ Deno.serve(async (req) => {
         const cleanDigits = cleanGroupJid.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
 
         // REGRA SOLICITADA:
-        // Verifica se aquele ID de grupo informado está dentro das configurações do grupo (pasta/campanha).
-        // Se estiver, manda mensagem SÓ para aquele grupo em específico.
-        const matchedGroup = (existingLinkedGroups || []).find((g) => {
+        // Verifica se aquele ID de grupo informado está dentro das configurações do fluxo ou da pasta.
+        // 1. Tenta encontrar nos grupos vinculados à campanha (campaign_groups)
+        let matchedGroup = (existingLinkedGroups || []).find((g) => {
           const gClean = (g.group_jid || "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
           return gClean && gClean === cleanDigits;
         });
 
+        // 2. Tenta encontrar nos selectedGroupJids do fluxo (triggerConfig / sequence.trigger_config)
+        const allConfiguredSelectedJids = [
+          ...(selectedGroupJids || []),
+          ...((triggerConfig as any)?.selectedGroupJids || []),
+          ...((typedSequence?.trigger_config as any)?.selectedGroupJids || []),
+        ];
+
+        const matchedInSelected = allConfiguredSelectedJids.find((j) => {
+          const jClean = String(j || "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+          return jClean && jClean === cleanDigits;
+        });
+
+        if (!matchedGroup && matchedInSelected) {
+          let groupName = "Grupo " + cleanDigits;
+          let instId = primaryInstanceId || null;
+          try {
+            const { data: gc } = await supabase
+              .from("group_campaigns")
+              .select("id, name, group_name, group_jid, instance_id")
+              .or(`group_jid.eq.${cleanGroupJid},group_jid.ilike.%${cleanDigits}%`)
+              .limit(1)
+              .maybeSingle();
+            if (gc) {
+              groupName = gc.group_name || gc.name || groupName;
+              instId = gc.instance_id || instId;
+            }
+          } catch (e) {
+            console.warn("[TriggerSequence] Could not fetch group_campaigns metadata:", e);
+          }
+
+          matchedGroup = {
+            group_jid: cleanGroupJid,
+            group_name: groupName,
+            instance_id: instId,
+          };
+          console.log(`[TriggerSequence] 🎯 Grupo validado em selectedGroupJids do fluxo: ${matchedGroup.group_name} (${cleanGroupJid})`);
+        }
+
+        // 3. Se ainda não encontrou, verifica se o grupo está na mesma pasta do fluxo
+        if (!matchedGroup) {
+          try {
+            const { data: wfDef } = await supabase
+              .from("workflow_definitions")
+              .select("id, folder_id, company_id")
+              .or(`id.eq.${typedSequence.id},source_id.eq.${typedSequence.id}`)
+              .limit(1)
+              .maybeSingle();
+
+            if (wfDef?.folder_id) {
+              const { data: wfFolder } = await supabase
+                .from("workflow_folders")
+                .select("id, name")
+                .eq("id", wfDef.folder_id)
+                .maybeSingle();
+
+              if (wfFolder?.name) {
+                const { data: grpFolder } = await supabase
+                  .from("group_folders")
+                  .select("id, name")
+                  .eq("company_id", wfDef.company_id || typedSequence.company_id)
+                  .ilike("name", wfFolder.name)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (grpFolder) {
+                  const { data: gcItem } = await supabase
+                    .from("group_campaigns")
+                    .select("id, name, group_name, group_jid, instance_id")
+                    .or(`group_jid.eq.${cleanGroupJid},group_jid.ilike.%${cleanDigits}%`)
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (gcItem) {
+                    const { data: assign } = await supabase
+                      .from("group_folder_assignments")
+                      .select("id")
+                      .eq("folder_id", grpFolder.id)
+                      .eq("group_id", gcItem.id)
+                      .limit(1)
+                      .maybeSingle();
+
+                    if (assign) {
+                      matchedGroup = {
+                        group_jid: gcItem.group_jid || cleanGroupJid,
+                        group_name: gcItem.group_name || gcItem.name || ("Grupo " + cleanDigits),
+                        instance_id: gcItem.instance_id || primaryInstanceId || null,
+                      };
+                      console.log(`[TriggerSequence] 📁 Grupo validado via pasta compartilhada ("${wfFolder.name}"): ${matchedGroup.group_name}`);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (folderCheckErr) {
+            console.warn("[TriggerSequence] Error in folder-based group validation:", folderCheckErr);
+          }
+        }
+
         if (matchedGroup) {
-          console.log(`[TriggerSequence] 🎯 Grupo informado (${cleanGroupJid}) VALIDADO entre os grupos do fluxo (${matchedGroup.group_name}). Enviando SOMENTE para ele!`);
+          console.log(`[TriggerSequence] 🎯 Grupo informado (${cleanGroupJid}) VALIDADO nas configurações do fluxo/pasta (${matchedGroup.group_name}). Enviando SOMENTE para ele!`);
           targetGroups = [{
             group_jid: matchedGroup.group_jid,
             group_name: matchedGroup.group_name,
             instance_id: matchedGroup.instance_id || primaryInstanceId || null,
           }];
         } else {
-          console.warn(`[TriggerSequence] ⚠️ Grupo informado (${cleanGroupJid}) NÃO pertence aos grupos configurados neste fluxo/pasta (${(existingLinkedGroups || []).map(g => g.group_jid).join(", ")}). Cancelando disparo para não enviar para outros grupos.`);
+          console.warn(`[TriggerSequence] ⚠️ Grupo informado (${cleanGroupJid}) NÃO pertence aos grupos configurados neste fluxo/pasta. Cancelando disparo para não enviar para outros grupos.`);
           return new Response(
             JSON.stringify({ 
               success: true, 
