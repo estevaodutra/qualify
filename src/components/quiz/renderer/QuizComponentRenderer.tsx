@@ -53,13 +53,20 @@ function formatPhone(value: string, mask: string): string {
   return formatted;
 }
 
+export interface ButtonActionPayload {
+  actionType?: string;
+  redirectUrl?: string;
+  openInNewTab?: boolean;
+  targetStepId?: string | null;
+}
+
 const RedirectComponent: React.FC<{
   config: Record<string, unknown>;
   primaryColor: string;
   borderStyle: React.CSSProperties;
   isEditor: boolean;
   onOptionSelect?: (optId: string, destination: string | null) => void;
-  onNext?: (clickedId?: string) => void;
+  onNext?: (clickedId?: string, actionPayload?: ButtonActionPayload) => void;
   componentId: string;
 }> = ({
   config,
@@ -124,21 +131,12 @@ const RedirectComponent: React.FC<{
           hasTriggeredRef.current = true;
           if (!isEditor) {
             const buttonIdName = (config.idName as string) || componentId;
-            if (navigationType === "url" || navigationType === "redirect") {
-              if (externalUrl) {
-                let url = externalUrl.trim();
-                if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("www.")) {
-                  url = `https://${url}`;
-                } else if (url.startsWith("www.")) {
-                  url = `https://${url}`;
-                }
-                window.location.href = url;
-              } else {
-                onNext?.(buttonIdName);
-              }
-            } else {
-              onOptionSelect?.(buttonIdName, destination);
-            }
+            const isExternal = navigationType === "url" || navigationType === "redirect";
+            onNext?.(buttonIdName, {
+              actionType: isExternal ? "redirect" : "navigate",
+              redirectUrl: externalUrl,
+              targetStepId: destination,
+            });
           } else {
             // No modo editor: pausa 1.5s e reinicia para que o usuário possa ver a animação contínua
             loopTimeoutId = setTimeout(() => {
@@ -215,7 +213,7 @@ interface ComponentRendererProps {
   dragHandleProps?: Record<string, any>;
   onFormChange?: (val: string) => void;
   onOptionSelect?: (optId: string, destination: string | null) => void;
-  onNext?: (clickedId?: string) => void;
+  onNext?: (clickedId?: string, actionPayload?: ButtonActionPayload) => void;
   onSelectComponent?: (id: string) => void;
   onDuplicateComponent?: (id: string) => void;
   onDeleteComponent?: (id: string) => void;
@@ -405,28 +403,14 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
           }
         }
 
-        if (actionType === "redirect") {
-          if (redirectUrl) {
-            let formattedUrl = redirectUrl.trim();
-            if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-              formattedUrl = `https://${formattedUrl}`;
-            }
-            if (openInNewTab) {
-              window.open(formattedUrl, "_blank");
-            } else {
-              window.location.href = formattedUrl;
-            }
-          }
-          return;
-        }
-
         const buttonIdName = (config.idName as string) || component.id;
 
-        if (targetStepId) {
-          onOptionSelect?.(buttonIdName, targetStepId);
-        } else {
-          onNext?.(buttonIdName);
-        }
+        onNext?.(buttonIdName, {
+          actionType,
+          redirectUrl,
+          openInNewTab,
+          targetStepId,
+        });
       };
 
       return (
@@ -664,6 +648,15 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
           <button
             type="button"
             disabled={isEditor}
+            onClick={() => {
+              if (isEditor) return;
+              const buttonIdName = (config.idName as string) || component.id;
+              onNext?.(buttonIdName, {
+                actionType: (config.ctaAction as string) || "whatsapp",
+                redirectUrl: (config.redirectUrl as string) || (config.whatsappUrl as string) || "",
+                targetStepId: (config.targetStepId as string) || null,
+              });
+            }}
             style={{ backgroundColor: primaryColor, borderRadius: borderStyle.borderRadius }}
             className={cn(
               "w-full py-3 px-6 text-white font-semibold text-sm shadow-md hover:opacity-90 transition-opacity",

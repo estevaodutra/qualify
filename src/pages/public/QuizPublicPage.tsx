@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { QuizStepRenderer } from "@/components/quiz/renderer/QuizStepRenderer";
+import { ButtonActionPayload } from "@/components/quiz/renderer/QuizComponentRenderer";
 import { QuizFunnel, QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
 import { quizTrackingService } from "@/services/quiz/quizTrackingService";
 
@@ -505,11 +506,25 @@ export default function QuizPublicPage() {
       const config = comp.config || {};
 
       if (type.startsWith("field_")) {
-        const isRequired = config.required !== false;
+        const isRequired =
+          config.required === true ||
+          config.required === "true" ||
+          (config.required !== false && config.required !== "false");
         const val = (activeFormValues[comp.id] || "").trim();
 
         if (isRequired && !val) {
-          errors[comp.id] = "Por favor, preencha este campo obrigatório.";
+          const fieldLabel = (config.label as string) || "este campo";
+          if (type === "field_phone") {
+            errors[comp.id] = "Por favor, informe seu número de WhatsApp / telefone.";
+          } else if (type === "field_email") {
+            errors[comp.id] = "Por favor, informe seu e-mail.";
+          } else if (type === "field_name") {
+            errors[comp.id] = "Por favor, informe seu nome.";
+          } else if (type === "field_cpf") {
+            errors[comp.id] = "Por favor, informe seu CPF.";
+          } else {
+            errors[comp.id] = `Por favor, preencha o campo "${fieldLabel}".`;
+          }
           continue;
         }
 
@@ -534,7 +549,10 @@ export default function QuizPublicPage() {
       }
 
       if (type === "options" || type === "cards_choice") {
-        const isRequired = config.required !== false;
+        const isRequired =
+          config.required === true ||
+          config.required === "true" ||
+          (config.required !== false && config.required !== "false");
         const selected = activeSelectedOptions[comp.id] || [];
 
         if (isRequired && selected.length === 0) {
@@ -553,7 +571,8 @@ export default function QuizPublicPage() {
     forcedDestination?: string | null,
     clickedElementId?: string,
     overrideSelectedOptions?: Record<string, string[]>,
-    overrideFormValues?: Record<string, string>
+    overrideFormValues?: Record<string, string>,
+    actionPayload?: ButtonActionPayload
   ) => {
     if (!funnel || !steps[currentStepIndex]) return;
 
@@ -700,8 +719,36 @@ export default function QuizPublicPage() {
         });
       }
 
-      // 6. Navigation / Destination Resolution logic
-      let finalDestinationStepId: string | null = forcedDestination || null;
+      // 6. External Redirect Handling (from Button Action)
+      if (actionPayload?.actionType === "redirect" || actionPayload?.actionType === "url") {
+        let targetUrl = actionPayload.redirectUrl?.trim() || "";
+        if (targetUrl) {
+          if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://") && !targetUrl.startsWith("www.")) {
+            targetUrl = `https://${targetUrl}`;
+          } else if (targetUrl.startsWith("www.")) {
+            targetUrl = `https://${targetUrl}`;
+          }
+
+          if (submissionId) {
+            await quizTrackingService.completeSubmission(submissionId, funnel.id, funnel.companyId);
+            await quizTrackingService.dispatchWebhook({
+              funnel,
+              submissionId,
+              triggerType: "completion"
+            });
+          }
+
+          if (actionPayload.openInNewTab) {
+            window.open(targetUrl, "_blank");
+          } else {
+            window.location.href = targetUrl;
+          }
+          return;
+        }
+      }
+
+      // 7. Navigation / Destination Resolution logic
+      let finalDestinationStepId: string | null = forcedDestination || actionPayload?.targetStepId || null;
 
       // If button has no explicit destination (null), check if any selected option in this step has a destination configured
       if (!finalDestinationStepId) {
@@ -964,7 +1011,15 @@ export default function QuizPublicPage() {
             setTimeout(() => handleNextStep(dest, String(clickedId), updatedOptions, latestFormValues.current), 150);
           }
         }}
-        onNextStep={(clickedId) => handleNextStep(null, clickedId)}
+        onNextStep={(clickedId, actionPayload) => {
+          handleNextStep(
+            actionPayload?.targetStepId || null,
+            clickedId,
+            undefined,
+            undefined,
+            actionPayload
+          );
+        }}
         onPrevStep={handlePrevStep}
       />
     </div>

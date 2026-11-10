@@ -1,7 +1,7 @@
 // src/components/quiz/renderer/QuizStepRenderer.tsx
 import React from "react";
 import { QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
-import { QuizComponentRenderer } from "./QuizComponentRenderer";
+import { QuizComponentRenderer, ButtonActionPayload } from "./QuizComponentRenderer";
 import { ArrowLeft } from "lucide-react";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import {
@@ -36,7 +36,7 @@ interface StepRendererProps {
   submitting?: boolean;
   onFormChange?: (componentId: string, val: string) => void;
   onOptionSelect?: (componentId: string, optionId: string, destination: string | null) => void;
-  onNextStep?: (clickedId?: string) => void;
+  onNextStep?: (clickedId?: string, actionPayload?: ButtonActionPayload) => void;
   onPrevStep?: () => void;
   onSelectComponent?: (id: string) => void;
 }
@@ -168,7 +168,7 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
       dragHandleProps={dragHandleProps}
       onFormChange={(val) => onFormChange?.(comp.id, val)}
       onOptionSelect={(optId, destination) => onOptionSelect?.(comp.id, optId, destination)}
-      onNext={(clickedId) => onNextStep?.(clickedId)}
+      onNext={(clickedId, actionPayload) => onNextStep?.(clickedId, actionPayload)}
       onSelectComponent={onSelectComponent}
       onDuplicateComponent={(id) => duplicateComponent(id)}
       onDeleteComponent={(id) => deleteComponent(id)}

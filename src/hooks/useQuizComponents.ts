@@ -228,17 +228,17 @@ function getDefaultConfig(type: QuizComponentType): Record<string, unknown> {
         ...APPEARANCE_DEFAULTS,
       };
     case "field_name":
-      return { label: "Seu nome", placeholder: "Digite seu nome...", required: false, variableName: "name", ...APPEARANCE_DEFAULTS };
+      return { label: "Seu nome", placeholder: "Digite seu nome...", required: true, variableName: "name", ...APPEARANCE_DEFAULTS };
     case "field_email":
-      return { label: "E-mail", placeholder: "Digite seu e-mail...", required: false, variableName: "email", ...APPEARANCE_DEFAULTS };
+      return { label: "E-mail", placeholder: "Digite seu e-mail...", required: true, variableName: "email", ...APPEARANCE_DEFAULTS };
     case "field_phone":
-      return { label: "Celular", placeholder: "Digite seu celular...", required: false, variableName: "phone", mask: "(99) 99999-9999", ...APPEARANCE_DEFAULTS };
+      return { label: "Celular", placeholder: "Digite seu celular...", required: true, variableName: "phone", mask: "(99) 99999-9999", ...APPEARANCE_DEFAULTS };
     case "field_number":
-      return { label: "Número", placeholder: "Digite um número...", required: false, variableName: "number", mask: "", ...APPEARANCE_DEFAULTS };
+      return { label: "Número", placeholder: "Digite um número...", required: true, variableName: "number", mask: "", ...APPEARANCE_DEFAULTS };
     case "field_textarea":
-      return { label: "Mensagem", placeholder: "Digite sua mensagem...", required: false, variableName: "message", ...APPEARANCE_DEFAULTS };
+      return { label: "Mensagem", placeholder: "Digite sua mensagem...", required: true, variableName: "message", ...APPEARANCE_DEFAULTS };
     case "field_date":
-      return { label: "Data", placeholder: "Insira uma data...", required: false, variableName: "date", mask: "dd/mm/YYYY", ...APPEARANCE_DEFAULTS };
+      return { label: "Data", placeholder: "Insira uma data...", required: true, variableName: "date", mask: "dd/mm/YYYY", ...APPEARANCE_DEFAULTS };
     case "field_height":
       return { required: false, unit: "cm", defaultValue: 180, min: 100, max: 250, variableName: "height", ...APPEARANCE_DEFAULTS };
     case "field_weight":
