@@ -225,12 +225,6 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         intentionalDisconnectRef.current = false;
         setStatus("connecting");
         setErrorMessage(null);
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("Microfone indisponível. Abra o sistema em HTTPS e verifique o navegador.");
-        }
-        const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
-        microphone.getTracks().forEach((track) => track.stop());
-
         // Carregar libwebphone.js
         await loadLibwebphone();
 
@@ -418,7 +412,7 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // AUTO-CONNECT SIP: if credentials are available, keep the browser webphone registered.
   useEffect(() => {
     if (!user?.id || !activeCompanyId || !operator?.id || !hasSipConfig || !isPrimaryTab) return;
-    if (status === "connecting" || status === "dialing" || status === "ringing" || status === "in_call") return;
+    if (status !== "disconnected") return;
     if (webphoneRef.current?.getUserAgent()?.isRegistered?.()) return;
 
     const timer = window.setTimeout(() => {
@@ -518,6 +512,33 @@ export const WebphoneProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toast({
           title: "Erro de Operador",
           description: "Operador não carregado.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Solicitar acesso ao microfone somente quando a chamada realmente for iniciada.
+      // Este stream é apenas um preflight de permissão e é liberado imediatamente;
+      // a libwebphone abrirá o stream real quando a chamada SIP for estabelecida.
+      if (!navigator.mediaDevices?.getUserMedia) {
+        toast({
+          title: "Microfone indisponível",
+          description: "Abra a Qualify em HTTPS e verifique as permissões do navegador.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      try {
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        permissionStream.getTracks().forEach((track) => track.stop());
+      } catch (err: any) {
+        toast({
+          title: "Microfone bloqueado",
+          description:
+            err?.name === "NotAllowedError"
+              ? "Permita o acesso ao microfone para realizar a ligação."
+              : err?.message || "Não foi possível acessar o microfone.",
           variant: "destructive",
         });
         return false;
