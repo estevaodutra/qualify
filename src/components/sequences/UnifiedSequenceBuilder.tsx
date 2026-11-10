@@ -70,7 +70,7 @@ export interface UnifiedSequenceBuilderProps {
   workflowConfig?: Record<string, unknown>;
 }
 
-const RANDOMIZER_PORT_BASE_Y = 124;
+const RANDOMIZER_PORT_BASE_Y = 76;
 const RANDOMIZER_PORT_SPACING = 30;
 
 function getSortedRandomizerBranches(node: LocalNode): RandomizerBranch[] {
@@ -1501,7 +1501,7 @@ export function UnifiedSequenceBuilder({
                         top: posY,
                         width: 320,
                         minHeight: isRandomizer
-                          ? RANDOMIZER_PORT_BASE_Y + Math.max(0, randomizerBranches.length - 1) * RANDOMIZER_PORT_SPACING + 28
+                          ? RANDOMIZER_PORT_BASE_Y + Math.max(0, randomizerBranches.length - 1) * RANDOMIZER_PORT_SPACING + 30
                           : undefined,
                         pointerEvents: "auto"
                       }}
@@ -1612,13 +1612,14 @@ export function UnifiedSequenceBuilder({
                               >
                                 <div className="h-1.5 w-1.5 rounded-full bg-fuchsia-500" />
                               </div>
-                              <span
-                                style={{ top: portY - 4 }}
-                                className="absolute right-2 text-[8px] font-bold text-fuchsia-500 select-none truncate max-w-[130px]"
-                                title={branch.label}
+                              <div
+                                style={{ top: portY - 5 }}
+                                className="pointer-events-none absolute left-4 right-4 flex h-6 items-center justify-between gap-2 rounded-md bg-fuchsia-50/70 px-2 text-[10px] font-semibold text-fuchsia-700"
+                                title={node.config.mode === "round_robin" ? branch.label : `${branch.label} · ${branch.weight}%`}
                               >
-                                {branch.label}
-                              </span>
+                                <span className="min-w-0 truncate">{branch.label}</span>
+                                {node.config.mode !== "round_robin" && <span className="shrink-0">{branch.weight}%</span>}
+                              </div>
                             </Fragment>
                           );
                         })
@@ -2621,19 +2622,15 @@ export function UnifiedSequenceBuilder({
                                 </div>
 
                                 {/* Card Content / Description */}
-                                <div
+                                {(!isRandomizer || randomizerBranches.length === 0) && <div
                                   className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
-                                  title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
                                 >
                                   {isCondition ? (
                                     condDef?.description || "Clique para selecionar e configurar esta regra..."
                                   ) : isAction ? (
                                     actionDef?.description || "Clique para selecionar e configurar esta ação..."
                                   ) : isRandomizer ? (
-                                    randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
-                                    node.config.mode === "round_robin"
-                                      ? randomizerBranches.map(b => b.label).join(" → ")
-                                      : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
+                                    "Clique para configurar as ramificações..."
                                   ) : node.nodeType === "status" ? (
                               (() => {
                                 const statusType = (node.config.statusType as string) || "text";
@@ -2676,7 +2673,7 @@ export function UnifiedSequenceBuilder({
                                     "Clique para configurar o bloco...";
                                   })()
                                 )}
-                              </div>
+                              </div>}
                             </>
                           );
                         })()}
@@ -2688,9 +2685,9 @@ export function UnifiedSequenceBuilder({
 
 
                       {/* Card footer: node order only — editing is now a click on the card body, deletion lives in the hover toolbar */}
-                      <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
+                      {!isRandomizer && <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
                         <span className="text-[8px] font-bold text-slate-400/60 font-mono">NODE #{node.nodeOrder + 1}</span>
-                      </div>
+                      </div>}
                     </div>
                   );
                 })}
