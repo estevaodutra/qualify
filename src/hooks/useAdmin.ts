@@ -976,3 +976,9 @@ export function useAdminInstanceConnectionLogs(filters: InstanceConnectionLogsFi
     },
   });
 }
+
+export function useAdmin() {
+  const { data: users = [], isLoading: isLoadingUsers } = useAdminUsers();
+  const { data: companies = [], isLoading: isLoadingCompanies } = useAdminCompanies();
+  return { users, companies, isLoading: isLoadingUsers || isLoadingCompanies };
+}

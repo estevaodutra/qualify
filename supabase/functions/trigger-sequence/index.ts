@@ -428,9 +428,22 @@ Deno.serve(async (req) => {
     let targetGroups: { group_jid: string; group_name: string | null; instance_id: string | null }[] = [];
 
     if (shouldSendToGroup) {
-      if (payload.group_jid) {
-        // If triggered by a specific group event (member_join/leave), ONLY target that specific group!
-        targetGroups = [{ group_jid: payload.group_jid as string, group_name: null, instance_id: primaryInstanceId || null }];
+      const explicitGroupJid = payload.group_jid 
+        || payload.groupJid 
+        || payload.group_id 
+        || payload.groupId 
+        || payload.chat_id 
+        || (payload.body && (payload.body.group_jid || payload.body.group_id || payload.body.chat_id || payload.body.groupJid))
+        || (payload.data && (payload.data.group_jid || payload.data.group_id || payload.data.chat_id || payload.data.groupJid));
+
+      if (explicitGroupJid) {
+        let cleanGroupJid = String(explicitGroupJid).trim();
+        if (!cleanGroupJid.includes("@")) {
+          const digits = cleanGroupJid.replace(/\D/g, "");
+          cleanGroupJid = `${digits}@g.us`;
+        }
+        console.log(`[TriggerSequence] Webhook provided specific group destination: ${cleanGroupJid}`);
+        targetGroups = [{ group_jid: cleanGroupJid, group_name: null, instance_id: primaryInstanceId || null }];
       } else if (selectedGroupJids && selectedGroupJids.length > 0) {
         // Target ALL groups configured in selectedGroupJids
         // Deduplicate by numeric identifier so both 123-group and 123@g.us aren't duplicated

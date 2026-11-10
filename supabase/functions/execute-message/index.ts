@@ -4651,6 +4651,44 @@ Deno.serve(async (req) => {
           }
 
           console.log(`[ExecuteMessage] Processing content node ${node.id} with ${subMessages.length} sub-messages`);
+
+          // Destino customizado por variável ou ID (se configurado no nó, senão mantém activeDestinations padrão)
+          let effectiveContentDestinations = [...activeDestinations];
+          const rawCustomDest = (node.config?.customDestination || node.config?.targetDestination || "") as string;
+          if (rawCustomDest && typeof rawCustomDest === "string" && rawCustomDest.trim()) {
+            const resolved = replaceVariables(rawCustomDest.trim());
+            if (resolved && resolved.trim() && !resolved.startsWith("{{") && !resolved.startsWith("{")) {
+              const clean = resolved.trim();
+              let targetJid = clean;
+              if (!targetJid.includes("@")) {
+                const digits = targetJid.replace(/\D/g, "");
+                if (targetJid.includes("-") || digits.startsWith("1203") || digits.length >= 16 || isWorkflowGroupMode) {
+                  targetJid = `${digits}@g.us`;
+                } else {
+                  targetJid = `${digits}@s.whatsapp.net`;
+                }
+              }
+
+              const matchedFromActive = activeDestinations.find(d => 
+                d.group_jid === targetJid || 
+                d.group_jid?.split("@")[0] === targetJid.split("@")[0]
+              );
+
+              if (matchedFromActive) {
+                effectiveContentDestinations = [matchedFromActive];
+              } else {
+                const isPrivate = targetJid.endsWith("@s.whatsapp.net");
+                effectiveContentDestinations = [{
+                  group_jid: targetJid,
+                  group_name: isPrivate ? "Contato Personalizado" : "Grupo Personalizado",
+                  isPrivate: isPrivate,
+                }];
+              }
+              console.log(`[ExecuteMessage] 🎯 Bloco ${node.id} utilizando destino customizado: ${targetJid} (Substituindo ${activeDestinations.length} destino(s) padrão)`);
+            } else {
+              console.log(`[ExecuteMessage] ℹ️ Destino customizado não resolvido (${rawCustomDest}). Utilizando configurações padrão do fluxo.`);
+            }
+          }
           
           let subFailed = false;
           let subFailedError: string | null = null;
@@ -4713,7 +4751,7 @@ Deno.serve(async (req) => {
             
             // Send to all destinations in parallel
             const destResults = await Promise.allSettled(
-              activeDestinations.map(async (dest) => {
+              effectiveContentDestinations.map(async (dest) => {
                 const isSubNodePrivate = Boolean(
                   formattedConfig.sendPrivate ?? formattedConfig.send_private ?? subMsg.sendPrivate ?? subMsg.send_private ?? false
                 );
@@ -5845,6 +5883,40 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Destino customizado por variável ou ID para nó avulso
+        let effectiveNodeDestinations = [...activeDestinations];
+        const rawNodeCustomDest = (node.config?.customDestination || node.config?.targetDestination || "") as string;
+        if (rawNodeCustomDest && typeof rawNodeCustomDest === "string" && rawNodeCustomDest.trim()) {
+          const resolved = replaceVariables(rawNodeCustomDest.trim());
+          if (resolved && resolved.trim() && !resolved.startsWith("{{") && !resolved.startsWith("{")) {
+            const clean = resolved.trim();
+            let targetJid = clean;
+            if (!targetJid.includes("@")) {
+              const digits = targetJid.replace(/\D/g, "");
+              if (targetJid.includes("-") || digits.startsWith("1203") || digits.length >= 16 || isWorkflowGroupMode) {
+                targetJid = `${digits}@g.us`;
+              } else {
+                targetJid = `${digits}@s.whatsapp.net`;
+              }
+            }
+            const matchedFromActive = activeDestinations.find(d => 
+              d.group_jid === targetJid || 
+              d.group_jid?.split("@")[0] === targetJid.split("@")[0]
+            );
+            if (matchedFromActive) {
+              effectiveNodeDestinations = [matchedFromActive];
+            } else {
+              const isPrivate = targetJid.endsWith("@s.whatsapp.net");
+              effectiveNodeDestinations = [{
+                group_jid: targetJid,
+                group_name: isPrivate ? "Contato Personalizado" : "Grupo Personalizado",
+                isPrivate: isPrivate,
+              }];
+            }
+            console.log(`[ExecuteMessage] 🎯 Nó avulso ${node.id} utilizando destino customizado: ${targetJid}`);
+          }
+        }
+
         // Send this node to all destinations in parallel
         const nextActiveDestinations: DestinationData[] = [];
         const nodeSendResults: Array<{ destination: string; status: string }> = [];
@@ -5854,7 +5926,7 @@ Deno.serve(async (req) => {
         let userInputTimeoutNodeId: string | null = null;
 
         const destResults = await Promise.allSettled(
-          activeDestinations.map(async (dest) => {
+          effectiveNodeDestinations.map(async (dest) => {
             const action = getActionForNodeType(node.node_type);
             
             // Clone and format config, applying variable replacement

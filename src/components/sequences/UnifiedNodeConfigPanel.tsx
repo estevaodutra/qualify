@@ -4229,6 +4229,43 @@ export function UnifiedNodeConfigPanel({
                     </Select>
                   </div>
 
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        Destino da Mensagem (Opcional)
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 cursor-pointer" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="w-64 text-xs">
+                                Deixe em branco para usar o destino padrão do fluxo (grupos vinculados à pasta/campanha). 
+                                Se preencher com um ID de grupo ou variável (ex: {{group_id}} ou {{chat_id}}), a mensagem deste bloco será enviada exclusivamente para esse grupo.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </Label>
+                      <VariablePicker
+                        isGroup={isGroup}
+                        onSelect={(val) => {
+                          const current = (currentConfig.customDestination as string) || "";
+                          updateConfig("customDestination", current + val);
+                        }}
+                      />
+                    </div>
+                    <Input
+                      value={(currentConfig.customDestination as string) || ""}
+                      onChange={(e) => updateConfig("customDestination", e.target.value)}
+                      placeholder="Padrão do fluxo ou {{group_id}}"
+                      className="h-9 bg-white rounded-xl border-border/40 text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Se não configurado com variável ou ID, o envio utilizará os grupos padrão do fluxo.
+                    </p>
+                  </div>
+
                   <div className="space-y-3 mb-6 bg-slate-50/50 border border-slate-200 rounded-xl p-3">
                      {messages.length === 0 ? (
                        <div className="text-xs text-center text-muted-foreground py-4">

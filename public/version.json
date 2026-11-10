@@ -1,6 +1,6 @@
 {
-  "commit": "9c4c98cc283cafddf61c1b459e33a51d89b76306",
-  "shortCommit": "9c4c98c",
-  "message": "chore: update version metadata",
-  "builtAt": "2026-11-07T12:00:39.285Z"
+  "commit": "d7f39359429d7640162266250b52d89ed960b008",
+  "shortCommit": "d7f3935",
+  "message": "feat: add notification node, departments management and mobile push notification support",
+  "builtAt": "2026-11-09T23:57:29.411Z"
 }

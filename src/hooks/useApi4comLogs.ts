@@ -174,7 +174,6 @@ export function useApi4comLogs() {
         };
       });
     },
-    refetchInterval: 15_000,
   });
 
   return { logs, isLoading, refetch };
