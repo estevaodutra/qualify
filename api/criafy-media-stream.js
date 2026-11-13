@@ -36,7 +36,8 @@ export default async function handler(req) {
         const value = upstream.headers.get(name);
         if (value) responseHeaders.set(name, value);
       }
-      responseHeaders.set("Cache-Control", "public, max-age=3600");
+      responseHeaders.set("Cache-Control", req.headers.get("range") ? "no-store" : "public, max-age=3600");
+      responseHeaders.set("Vary", "Range");
       return new Response(req.method === "HEAD" ? null : upstream.body, {
         status: upstream.status,
         headers: responseHeaders,
@@ -162,7 +163,8 @@ export default async function handler(req) {
       ...corsHeaders,
       "Content-Type": mimeType,
       "Content-Length": String(contentLength),
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": isPartial ? "no-store" : "public, max-age=31536000, immutable",
+      "Vary": "Range",
     };
 
     if (isPartial) {

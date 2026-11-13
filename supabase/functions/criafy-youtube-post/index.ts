@@ -170,12 +170,18 @@ Deno.serve(async (request) => {
       const { data: content } = await admin.from("criafy_contents")
         .select("media_url").eq("id", publication.content_id).eq("company_id", companyId).single();
       if (!content) throw new Error("Vídeo original não encontrado.");
-      const source = await fetch(safeMediaUrl(content.media_url, companyId), {
+      const mediaUrl = new URL(safeMediaUrl(content.media_url, companyId));
+      // Give every requested range a distinct URL. Some CDNs reuse a cached 206
+      // response for the same media URL even when the Range header changes.
+      mediaUrl.searchParams.set("upload_range", `${start}-${end}`);
+      const source = await fetch(mediaUrl, {
+        cache: "no-store",
         headers: { Range: `bytes=${start}-${end}` },
       });
       if (source.status !== 206) throw new Error("O armazenamento não respondeu ao trecho solicitado do vídeo.");
-      if (!source.headers.get("Content-Range")?.startsWith(`bytes ${start}-${end}/`)) {
-        throw new Error("O armazenamento retornou outro trecho do vídeo. Tente continuar novamente.");
+      const receivedRange = source.headers.get("Content-Range");
+      if (!receivedRange?.startsWith(`bytes ${start}-${end}/`)) {
+        throw new Error(`O armazenamento retornou outro trecho do vídeo (${receivedRange || "sem intervalo"}; esperado ${start}-${end}). Tente continuar novamente.`);
       }
       const bytes = new Uint8Array(await source.arrayBuffer());
       if (bytes.byteLength !== end - start + 1) throw new Error("Trecho do vídeo incompleto. Tente continuar novamente.");
