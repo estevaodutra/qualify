@@ -46,6 +46,8 @@ jobs:
       - name: Configure OAuth and Push secrets, then recreate functions container
         env:
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
         run: |
           set -eu
           test -n "$INSTAGRAM_APP_SECRET"
@@ -54,6 +56,9 @@ jobs:
           trap 'rm -f "$secret_file"' EXIT
           chmod 600 "$secret_file"
           printf 'INSTAGRAM_APP_SECRET=%s\n' "$INSTAGRAM_APP_SECRET" > "$secret_file"
+          if [ -n "$TIKTOK_CLIENT_KEY" ] && [ -n "$TIKTOK_CLIENT_SECRET" ]; then
+            printf 'TIKTOK_CLIENT_KEY=%s\nTIKTOK_CLIENT_SECRET=%s\n' "$TIKTOK_CLIENT_KEY" "$TIKTOK_CLIENT_SECRET" >> "$secret_file"
+          fi
 
           sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -az -e "ssh -o StrictHostKeyChecking=no -p 22022" "$secret_file" ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/qualify-supabase/.env.criafy
           sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -az -e "ssh -o StrictHostKeyChecking=no -p 22022" .github/scripts/setup-vapid.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/qualify-setup-vapid.sh

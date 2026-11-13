@@ -57,4 +57,11 @@ describe("Criafy OAuth state", () => {
       verifyCriafyOAuthState(state, secret, expected, 1_000 + OAUTH_STATE_MAX_AGE_MS + 1)
     ).rejects.toThrow("expired");
   });
+
+  it("does not accept an Instagram authorization as a TikTok callback", async () => {
+    const state = await createCriafyOAuthState({ ...expected, provider: "INSTAGRAM" }, secret);
+    await expect(
+      verifyCriafyOAuthState(state, secret, { ...expected, provider: "TIKTOK" })
+    ).rejects.toThrow("does not match");
+  });
 });

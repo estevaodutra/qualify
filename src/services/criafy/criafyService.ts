@@ -3,6 +3,7 @@ import { CriafyStrategyData } from "@/types/criafyStrategy";
 import { createEmptyStrategy } from "@/utils/criafyStrategyDefaults";
 import {
   CriafyInstagramAccount,
+  CriafySocialAccount,
   CriafyAccountBriefing,
   CriafyContent,
   CriafyQueueRule,
@@ -49,6 +50,35 @@ async function functionErrorMessage(data: unknown, error: unknown, fallback: str
 }
 
 export const criafyService = {
+  async getTikTokAccounts(companyId: string): Promise<CriafySocialAccount[]> {
+    const { data, error } = await (supabase as any).from("criafy_social_accounts")
+      .select("id,company_id,provider,provider_account_id,display_name,avatar_url,connection_status,created_at")
+      .eq("company_id", companyId).eq("provider", "TIKTOK")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getTikTokOAuthUrl(companyId: string): Promise<string> {
+    const { data, error } = await supabase.functions.invoke("criafy-tiktok-oauth", {
+      body: { action: "get-auth-url", companyId },
+    });
+    if (error || !data?.success || !data.authUrl) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao iniciar conexão TikTok."));
+    }
+    return data.authUrl;
+  },
+
+  async exchangeTikTokOAuthCode(companyId: string, code: string, state: string): Promise<CriafySocialAccount> {
+    const { data, error } = await supabase.functions.invoke("criafy-tiktok-oauth", {
+      body: { action: "exchange-code", companyId, code, state },
+    });
+    if (error || !data?.success || !data.account) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao conectar conta TikTok."));
+    }
+    return data.account;
+  },
+
   // ==========================================
   // CONTAS INSTAGRAM
   // ==========================================

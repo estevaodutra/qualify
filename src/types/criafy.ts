@@ -28,6 +28,17 @@ export interface CriafyInstagramAccount {
   updated_at: string;
 }
 
+export interface CriafySocialAccount {
+  id: string;
+  company_id: string;
+  provider: 'INSTAGRAM' | 'TIKTOK';
+  provider_account_id: string;
+  display_name: string;
+  avatar_url?: string | null;
+  connection_status: CriafyAccountConnectionStatus;
+  created_at: string;
+}
+
 export interface CriafyAccountBriefing {
   id: string;
   company_id: string;

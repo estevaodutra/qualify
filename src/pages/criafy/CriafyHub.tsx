@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   Instagram,
+  Music,
   Sparkles,
   Plus,
   BookOpen,
@@ -36,7 +37,7 @@ import {
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
-import { CriafyInstagramAccount } from "@/types/criafy";
+import { CriafyInstagramAccount, CriafySocialAccount } from "@/types/criafy";
 
 // Sub-views
 import { CriafyOverviewView } from "@/components/criafy/CriafyOverviewView";
@@ -175,7 +176,9 @@ export default function CriafyHub() {
   };
 
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
+  const [tikTokAccounts, setTikTokAccounts] = useState<CriafySocialAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const accountLoadSequenceRef = useRef(0);
   const processedOAuthCallbackRef = useRef<string | null>(null);
 
   // Search and view mode for accounts
@@ -425,16 +428,35 @@ export default function CriafyHub() {
 
   const loadAccounts = async () => {
     if (!activeCompanyId) return;
+    const sequence = ++accountLoadSequenceRef.current;
     setLoading(true);
+    setAccounts([]);
+    setTikTokAccounts([]);
     try {
-      const data = await criafyService.getAccounts(activeCompanyId);
-      setAccounts(data);
+      const instagram = await criafyService.getAccounts(activeCompanyId);
+      if (sequence !== accountLoadSequenceRef.current) return;
+      setAccounts(instagram);
+      try {
+        const tiktok = await criafyService.getTikTokAccounts(activeCompanyId);
+        if (sequence === accountLoadSequenceRef.current) setTikTokAccounts(tiktok);
+      } catch (tiktokError) {
+        console.warn("Contas TikTok indisponíveis até a migration ser aplicada:", tiktokError);
+        if (sequence === accountLoadSequenceRef.current) setTikTokAccounts([]);
+      }
     } catch (err: any) {
       toast.error(`Erro ao carregar contas do Criafy: ${err.message}`);
     } finally {
-      setLoading(false);
+      if (sequence === accountLoadSequenceRef.current) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (searchParams.get("tiktok") !== "connected") return;
+    toast.success("Conta TikTok conectada à Criafy.");
+    const next = new URLSearchParams(searchParams);
+    next.delete("tiktok");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleCheckHealth = async (accountId: string) => {
     const acc = accounts.find((a) => a.id === accountId) || null;
@@ -535,9 +557,10 @@ export default function CriafyHub() {
           id: "contas" as CriafyTabId,
           label: "Contas Conectadas",
           icon: Instagram,
-          badge: accounts.length > 0 ? String(accounts.length) : undefined,
+          badge: accounts.length + tikTokAccounts.length > 0
+            ? String(accounts.length + tikTokAccounts.length) : undefined,
           description:
-            "Gerencie perfis do Instagram conectados e integrações com a Meta.",
+            "Gerencie as contas sociais conectadas a este workspace.",
         },
       ],
     },
@@ -879,7 +902,7 @@ export default function CriafyHub() {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Contas Conectadas na Empresa ({accounts.length})
+                  Contas Conectadas na Empresa ({accounts.length + tikTokAccounts.length})
                 </h2>
 
                 <div className="flex items-center gap-2">
@@ -924,6 +947,23 @@ export default function CriafyHub() {
                   </div>
                 </div>
               </div>
+
+              {tikTokAccounts.filter((account) =>
+                !searchAccountQuery.trim() || account.display_name.toLowerCase()
+                  .includes(searchAccountQuery.toLowerCase())
+              ).map((account) => (
+                <Card key={account.id} className="border-border/70">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-cyan-400">
+                      <Music className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{account.display_name}</p>
+                      <p className="text-xs text-muted-foreground">TikTok · {account.connection_status === "CONNECTED" ? "Conectada" : account.connection_status}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
 
               {loading ? (
                 <div className="flex justify-center p-8">

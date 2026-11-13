@@ -1,6 +1,6 @@
 export const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
-export type CriafyOAuthProvider = "INSTAGRAM";
+export type CriafyOAuthProvider = "INSTAGRAM" | "TIKTOK";
 
 export interface CriafyOAuthStatePayload {
   companyId: string;
@@ -54,7 +54,7 @@ export async function createCriafyOAuthState(
 export async function verifyCriafyOAuthState(
   state: string,
   secret: string,
-  expected: Pick<CriafyOAuthStatePayload, "companyId" | "userId" | "redirectUri">,
+  expected: Pick<CriafyOAuthStatePayload, "companyId" | "userId" | "redirectUri"> & { provider?: CriafyOAuthProvider },
   now = Date.now()
 ): Promise<CriafyOAuthStatePayload> {
   if (!state) throw new Error("OAuth state is required");
@@ -84,7 +84,7 @@ export async function verifyCriafyOAuthState(
     payload.companyId !== expected.companyId ||
     payload.userId !== expected.userId ||
     payload.redirectUri !== expected.redirectUri ||
-    payload.provider !== "INSTAGRAM"
+    payload.provider !== (expected.provider || "INSTAGRAM")
   ) {
     throw new Error("OAuth state does not match this authorization request");
   }
