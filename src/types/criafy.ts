@@ -39,6 +39,13 @@ export interface CriafySocialAccount {
   created_at: string;
 }
 
+export interface CriafySocialStats {
+  followers: number | null;
+  posts: number | null;
+  views?: number | null;
+  likes?: number | null;
+}
+
 export interface CriafyTikTokCreatorInfo {
   creator_avatar_url?: string;
   creator_nickname: string;

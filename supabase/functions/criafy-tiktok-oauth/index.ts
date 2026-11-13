@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createCriafyOAuthState, verifyCriafyOAuthState } from "../_shared/criafyOAuthState.ts";
-import { requestTikTokTokens } from "../_shared/criafyTikTokApi.ts";
+import { callTikTokApi, requestTikTokTokens, usableTikTokToken } from "../_shared/criafyTikTokApi.ts";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -42,13 +42,36 @@ Deno.serve(async (request) => {
     if (userError || !user) return respond({ error: "Sessão inválida." }, 401);
 
     const admin = createClient(supabaseUrl, required("SUPABASE_SERVICE_ROLE_KEY"));
-    const { action, companyId, code, state } = await request.json();
+    const { action, companyId, accountId, code, state, includeStats } = await request.json();
     if (!companyId) return respond({ error: "Workspace não informado." }, 400);
 
     const { data: member, error: memberError } = await admin.from("company_members")
       .select("id").eq("company_id", companyId).eq("user_id", user.id)
       .eq("is_active", true).maybeSingle();
     if (memberError || !member) return respond({ error: "Sem acesso ao workspace." }, 403);
+
+    if (action === "stats") {
+      if (!accountId) return respond({ error: "Conta ausente." }, 400);
+      const { data: account } = await admin.from("criafy_social_accounts")
+        .select("id").eq("id", accountId).eq("company_id", companyId)
+        .eq("provider", "TIKTOK").single();
+      if (!account) return respond({ error: "Conta não encontrada." }, 404);
+      const { data: credential } = await admin.from("criafy_tiktok_credentials")
+        .select("scopes").eq("company_id", companyId).eq("account_id", accountId).single();
+      if (!credential?.scopes?.includes("user.info.stats")) {
+        return respond({ success: true, needsStatsPermission: true, stats: null });
+      }
+      const token = await usableTikTokToken(admin, companyId, accountId);
+      const data = await callTikTokApi(
+        "https://open.tiktokapis.com/v2/user/info/?fields=follower_count,video_count,likes_count", token,
+      );
+      const profile = data?.user;
+      return respond({ success: true, stats: {
+        followers: Number(profile?.follower_count ?? NaN),
+        posts: Number(profile?.video_count ?? NaN),
+        likes: Number(profile?.likes_count ?? NaN),
+      } });
+    }
 
     const uri = redirectUri();
     const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") ||
@@ -62,7 +85,9 @@ Deno.serve(async (request) => {
       const url = new URL("https://www.tiktok.com/v2/auth/authorize/");
       url.searchParams.set("client_key", required("TIKTOK_CLIENT_KEY"));
       url.searchParams.set("response_type", "code");
-      url.searchParams.set("scope", "user.info.basic,video.publish");
+      url.searchParams.set("scope", includeStats === true
+        ? "user.info.basic,video.publish,user.info.stats"
+        : "user.info.basic,video.publish");
       url.searchParams.set("redirect_uri", uri);
       url.searchParams.set("state", signedState);
       return respond({ success: true, authUrl: url.toString() });

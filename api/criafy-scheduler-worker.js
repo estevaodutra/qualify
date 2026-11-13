@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     // 1. Fetch up to 10 overdue scheduled publications
     const queryUrl = `${SUPABASE_URL}/rest/v1/criafy_publications?status=eq.SCHEDULED&scheduled_at=lte.${encodeURIComponent(
       nowIso
-    )}&select=id,company_id,account_id,publication_type,scheduled_at&order=scheduled_at.asc&limit=10`;
+    )}&publication_type=in.(FEED,REEL,STORY_IMAGE,STORY_VIDEO)&select=id,company_id,account_id,publication_type,scheduled_at&order=scheduled_at.asc&limit=10`;
 
     const fetchRes = await fetch(queryUrl, {
       headers: {
@@ -69,6 +69,109 @@ export default async function handler(req, res) {
       }
     }
 
+    // Social posts use their own validated publishing APIs and saved account options.
+    const socialUrl = `${SUPABASE_URL}/rest/v1/criafy_publications?status=eq.SCHEDULED&scheduled_at=lte.${encodeURIComponent(nowIso)}&publication_type=in.(TIKTOK_VIDEO,YOUTUBE_SHORT)&select=id,publication_type&order=scheduled_at.asc&limit=3`;
+    const socialRes = await fetch(socialUrl, {
+      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+    });
+    if (!socialRes.ok) throw new Error(`Failed to query scheduled social posts: ${socialRes.status}`);
+    const socialPosts = await socialRes.json();
+    for (const pub of socialPosts) {
+      const functionName = pub.publication_type === "TIKTOK_VIDEO" ? "criafy-tiktok-post" : "criafy-youtube-post";
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
+          method: "POST",
+          headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "run-scheduled", publicationId: pub.id }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+        results.push({ id: pub.id, type: pub.publication_type, success: true });
+      } catch (error) {
+        const reason = String(error.message || error).slice(0, 1000);
+        await fetch(`${SUPABASE_URL}/rest/v1/criafy_publications?id=eq.${pub.id}&status=eq.SCHEDULED`, {
+          method: "PATCH",
+          headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "FAILED",
+            [pub.publication_type === "TIKTOK_VIDEO" ? "tiktok_failure_reason" : "youtube_failure_reason"]: reason }),
+        });
+        results.push({ id: pub.id, type: pub.publication_type, success: false, error: reason });
+      }
+    }
+
+    // Resume scheduled YouTube uploads in bounded chunks on each cron tick.
+    const activeUrl = `${SUPABASE_URL}/rest/v1/criafy_publications?status=eq.PUBLISHING&publication_type=eq.YOUTUBE_SHORT&scheduled_at=not.is.null&youtube_video_id=is.null&select=id&order=scheduled_at.asc&limit=1`;
+    const activeRes = await fetch(activeUrl, {
+      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+    });
+    if (activeRes.ok) {
+      const activeUploads = await activeRes.json();
+      for (const pub of activeUploads) {
+        try {
+          for (let part = 0; part < 2; part++) {
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/criafy-youtube-post`, {
+              method: "POST",
+              headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "upload-step", publicationId: pub.id }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+            if (data.publication?.youtube_video_id) break;
+          }
+        } catch (error) {
+          console.error(`Scheduled YouTube upload ${pub.id}:`, error.message);
+        }
+      }
+    }
+    const processingUrl = `${SUPABASE_URL}/rest/v1/criafy_publications?status=eq.PUBLISHING&publication_type=eq.YOUTUBE_SHORT&scheduled_at=not.is.null&youtube_video_id=not.is.null&select=id&order=scheduled_at.asc&limit=5`;
+    const processingRes = await fetch(processingUrl, {
+      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+    });
+    if (processingRes.ok) {
+      for (const pub of await processingRes.json()) {
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/criafy-youtube-post`, {
+            method: "POST",
+            headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "status", publicationId: pub.id }),
+          });
+        } catch (error) {
+          console.error(`Scheduled YouTube status ${pub.id}:`, error.message);
+        }
+      }
+    }
+    const tikTokProcessingUrl = `${SUPABASE_URL}/rest/v1/criafy_publications?status=eq.PUBLISHING&publication_type=eq.TIKTOK_VIDEO&scheduled_at=not.is.null&tiktok_publish_id=not.is.null&select=id&order=scheduled_at.asc&limit=5`;
+    const tikTokProcessingRes = await fetch(tikTokProcessingUrl, {
+      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+    });
+    if (tikTokProcessingRes.ok) {
+      for (const pub of await tikTokProcessingRes.json()) {
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/criafy-tiktok-post`, {
+            method: "POST",
+            headers: { apikey: SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "status", publicationId: pub.id }),
+          });
+        } catch (error) {
+          console.error(`Scheduled TikTok status ${pub.id}:`, error.message);
+        }
+      }
+    }
+
     // 3. Redundancy: Check if any connected Instagram account has insights older than 60 min
     let triggeredMetricsSync = false;
     try {
@@ -107,7 +210,10 @@ export default async function handler(req, res) {
       success: true,
       timestamp: nowIso,
       checkedCount: pendingPubs.length,
-      publishedCount: results.filter((r) => r.success).length,
+      publishedCount: results.filter((r) => r.success &&
+        ["FEED", "REEL", "STORY_IMAGE", "STORY_VIDEO"].includes(r.type)).length,
+      socialStartedCount: results.filter((r) => r.success &&
+        ["TIKTOK_VIDEO", "YOUTUBE_SHORT"].includes(r.type)).length,
       triggeredMetricsSync,
       results,
     });

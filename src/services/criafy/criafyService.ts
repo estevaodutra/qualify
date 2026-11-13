@@ -4,6 +4,7 @@ import { createEmptyStrategy } from "@/utils/criafyStrategyDefaults";
 import {
   CriafyInstagramAccount,
   CriafySocialAccount,
+  CriafySocialStats,
   CriafyTikTokCreatorInfo,
   CriafyTikTokPostOptions,
   CriafyYouTubeShortOptions,
@@ -53,6 +54,42 @@ async function functionErrorMessage(data: unknown, error: unknown, fallback: str
 }
 
 export const criafyService = {
+  async getSocialAccountStats(companyId: string, account: CriafySocialAccount):
+    Promise<{ stats: CriafySocialStats | null; needsStatsPermission?: boolean }> {
+    const functionName = account.provider === "YOUTUBE" ? "criafy-youtube-oauth" : "criafy-tiktok-oauth";
+    const { data, error } = await supabase.functions.invoke(functionName, {
+      body: { action: "stats", companyId, accountId: account.id },
+    });
+    if (error || !data?.success) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao consultar métricas da conta."));
+    }
+    return { stats: data.stats || null, needsStatsPermission: Boolean(data.needsStatsPermission) };
+  },
+
+  async scheduleCrossPost(companyId: string, accountId: string, contentId: string,
+    scheduledAt: string, provider: "TIKTOK" | "YOUTUBE",
+    options: CriafyTikTokPostOptions | CriafyYouTubeShortOptions): Promise<CriafyPublication> {
+    if (options.consent !== true) throw new Error("Confirme o envio para a rede selecionada.");
+    const isTikTok = provider === "TIKTOK";
+    const youtube = isTikTok ? null : options as CriafyYouTubeShortOptions;
+    const tiktok = isTikTok ? options as CriafyTikTokPostOptions : null;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await (supabase as any).from("criafy_publications").insert({
+      company_id: companyId, account_id: null, social_account_id: accountId,
+      content_id: contentId, publication_type: isTikTok ? "TIKTOK_VIDEO" : "YOUTUBE_SHORT",
+      caption: isTikTok ? tiktok!.title : youtube!.title,
+      scheduled_at: scheduledAt, status: "SCHEDULED", created_by: user?.id || null,
+      ...(isTikTok ? {
+        tiktok_request_id: crypto.randomUUID(),
+        tiktok_options: { ...tiktok, consented_at: new Date().toISOString() },
+      } : {
+        youtube_request_id: crypto.randomUUID(),
+        youtube_options: { ...youtube, consented_at: new Date().toISOString() },
+      }),
+    }).select().single();
+    if (error || !data) throw new Error(error?.message || "Falha ao agendar publicação social.");
+    return data;
+  },
   async getYouTubeAccounts(companyId: string): Promise<CriafySocialAccount[]> {
     const { data, error } = await (supabase as any).from("criafy_social_accounts")
       .select("id,company_id,provider,provider_account_id,display_name,avatar_url,connection_status,created_at")
@@ -128,9 +165,9 @@ export const criafyService = {
     return data || [];
   },
 
-  async getTikTokOAuthUrl(companyId: string): Promise<string> {
+  async getTikTokOAuthUrl(companyId: string, includeStats = false): Promise<string> {
     const { data, error } = await supabase.functions.invoke("criafy-tiktok-oauth", {
-      body: { action: "get-auth-url", companyId },
+      body: { action: "get-auth-url", companyId, includeStats },
     });
     if (error || !data?.success || !data.authUrl) {
       throw new Error(await functionErrorMessage(data, error, "Falha ao iniciar conexão TikTok."));

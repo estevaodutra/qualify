@@ -51,6 +51,9 @@ import {
   TrialGraduationStrategy,
 } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
+import { CrossPostSettings, emptyCrossPost, tikTokOptions, youTubeOptions,
+  validateCrossPost } from "@/components/criafy/CrossPostSettings";
+import type { CrossPostSelection } from "@/components/criafy/CrossPostSettings";
 
 interface PendingUploadItem {
   tempId: string;
@@ -59,6 +62,8 @@ interface PendingUploadItem {
   mediaType: "VIDEO" | "IMAGE";
   title: string;
   durationSeconds?: number;
+  width?: number;
+  height?: number;
 }
 
 interface UnifiedScheduleItem {
@@ -68,6 +73,10 @@ interface UnifiedScheduleItem {
   previewUrl: string;
   mediaType: "VIDEO" | "IMAGE";
   durationSeconds?: number;
+  width?: number;
+  height?: number;
+  fileSizeBytes?: number;
+  mimeType?: string;
   file?: File;
   contentId?: string;
 }
@@ -169,6 +178,7 @@ export function BulkScheduleModal({
 
   // Bulk distribution settings
   const [targetAccountId, setTargetAccountId] = useState<string>("");
+  const [crossPost, setCrossPost] = useState<CrossPostSelection>(emptyCrossPost);
   const [postsPerDay, setPostsPerDay] = useState<number>(3);
   const [startDate, setStartDate] = useState<string>(() => {
     const now = new Date();
@@ -294,6 +304,7 @@ export function BulkScheduleModal({
   useEffect(() => {
     return () => {
       pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      setCrossPost(emptyCrossPost);
     };
   }, []);
 
@@ -319,9 +330,13 @@ export function BulkScheduleModal({
       const isVideo = file.type.startsWith("video/");
       const previewUrl = URL.createObjectURL(file);
       let durationSeconds: number | undefined = undefined;
+      let width: number | undefined;
+      let height: number | undefined;
       try {
         const meta = await extractAndValidateMedia(file);
         durationSeconds = meta.durationSeconds || undefined;
+        width = meta.width || undefined;
+        height = meta.height || undefined;
       } catch {
         // Ignore validation error on preview
       }
@@ -333,6 +348,8 @@ export function BulkScheduleModal({
         mediaType: isVideo ? "VIDEO" : "IMAGE",
         title: file.name.replace(/\.[^/.]+$/, ""),
         durationSeconds,
+        width,
+        height,
       });
     }
 
@@ -393,6 +410,10 @@ export function BulkScheduleModal({
       previewUrl: pf.previewUrl,
       mediaType: pf.mediaType,
       durationSeconds: pf.durationSeconds,
+      width: pf.width,
+      height: pf.height,
+      fileSizeBytes: pf.file.size,
+      mimeType: pf.file.type,
       file: pf.file,
     }));
 
@@ -406,6 +427,10 @@ export function BulkScheduleModal({
         previewUrl: c.media_url,
         mediaType: c.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
         durationSeconds: c.duration_seconds,
+        width: c.width,
+        height: c.height,
+        fileSizeBytes: c.file_size_bytes,
+        mimeType: c.mime_type,
         contentId: c.id,
       }));
 
@@ -668,6 +693,19 @@ export function BulkScheduleModal({
       );
       return;
     }
+    const issue = validateCrossPost(crossPost, plannedSlots.map((slot) => ({
+      title: slot.item.title, duration_seconds: slot.item.durationSeconds,
+      width: slot.item.width, height: slot.item.height,
+      file_size_bytes: slot.item.fileSizeBytes, mime_type: slot.item.mimeType,
+    })));
+    if (issue) { toast.error(issue); return; }
+    const captions = [...bulkCaptionVariations, ...Object.values(specificItemCaptions)];
+    if (crossPost.tiktokAccountId && captions.some((text) => text.length > 2200)) {
+      toast.error("A legenda do TikTok deve ter até 2200 caracteres."); return;
+    }
+    if (crossPost.youtubeAccountId && captions.some((text) => new TextEncoder().encode(text).length > 5000)) {
+      toast.error("A descrição do YouTube deve ter até 5000 bytes."); return;
+    }
 
     setSubmitting(true);
     try {
@@ -745,6 +783,7 @@ export function BulkScheduleModal({
       );
 
       const pubPayloads: Array<Partial<CriafyPublication>> = [];
+      const socialSlots: Array<{ contentId: string; title: string; caption: string; scheduledAt: string }> = [];
       let reelCounter = 0;
       const validVariations = bulkCaptionVariations
         .map((c) => c.trim())
@@ -797,9 +836,33 @@ export function BulkScheduleModal({
               : undefined,
           });
         });
+        if (crossPost.tiktokAccountId || crossPost.youtubeAccountId) {
+          const reel = pubPayloads.find((pub) => pub.content_id === contentId &&
+            pub.publication_type === "REEL" && pub.scheduled_at === slot.scheduledAt.toISOString());
+          socialSlots.push({ contentId, title: slot.item.title,
+            caption: reel?.caption || specificItemCaptions[slot.item.key]?.trim() || validVariations[0] || "",
+            scheduledAt: slot.scheduledAt.toISOString() });
+        }
       }
 
       await criafyService.createPublicationSequence(pubPayloads);
+      let socialFailures = 0;
+      for (const slot of socialSlots) {
+        if (crossPost.tiktokAccountId) {
+          try {
+            await criafyService.scheduleCrossPost(activeCompanyId, crossPost.tiktokAccountId,
+              slot.contentId, slot.scheduledAt, "TIKTOK", tikTokOptions(crossPost, slot.caption));
+          } catch { socialFailures++; }
+        }
+        if (crossPost.youtubeAccountId) {
+          try {
+            await criafyService.scheduleCrossPost(activeCompanyId, crossPost.youtubeAccountId,
+              slot.contentId, slot.scheduledAt, "YOUTUBE",
+              youTubeOptions(crossPost, slot.title, slot.caption));
+          } catch { socialFailures++; }
+        }
+      }
+      if (socialFailures) toast.error(`${socialFailures} publicação(ões) no TikTok/YouTube não puderam ser agendadas. Confira Publicações.`);
 
       if (failedUploadItems.length > 0) {
         toast.warning(
@@ -1439,6 +1502,8 @@ export function BulkScheduleModal({
                 ))}
               </div>
             </div>
+            {activeCompanyId && <CrossPostSettings companyId={activeCompanyId}
+              value={crossPost} onChange={setCrossPost} isBulk />}
           </div>
 
           {/* =========================================================

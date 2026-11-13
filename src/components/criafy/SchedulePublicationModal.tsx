@@ -60,6 +60,9 @@ import {
   TrialGraduationStrategy,
 } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
+import { CrossPostSettings, emptyCrossPost, tikTokOptions, youTubeOptions,
+  validateCrossPost } from "@/components/criafy/CrossPostSettings";
+import type { CrossPostSelection, CrossPostVideo } from "@/components/criafy/CrossPostSettings";
 
 interface PendingUploadItem {
   tempId: string;
@@ -68,6 +71,8 @@ interface PendingUploadItem {
   mediaType: "VIDEO" | "IMAGE";
   title: string;
   durationSeconds?: number;
+  width?: number;
+  height?: number;
 }
 
 interface UnifiedScheduleItem {
@@ -77,6 +82,10 @@ interface UnifiedScheduleItem {
   previewUrl: string;
   mediaType: "VIDEO" | "IMAGE";
   durationSeconds?: number;
+  width?: number;
+  height?: number;
+  fileSizeBytes?: number;
+  mimeType?: string;
   file?: File;
   contentId?: string;
 }
@@ -246,6 +255,7 @@ export function SchedulePublicationModal({
   const [isPublishNow, setIsPublishNow] = useState<boolean>(false);
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [crossPost, setCrossPost] = useState<CrossPostSelection>(emptyCrossPost);
 
   // Single post fields (supports BOTH Reel + Story simultaneously when <= 60s)
   const [selectedContentId, setSelectedContentId] = useState<string>("");
@@ -432,6 +442,7 @@ export function SchedulePublicationModal({
   // Set initial values
   useEffect(() => {
     if (open) {
+      setCrossPost(emptyCrossPost);
       if (initialMode) {
         setMode(initialMode);
       }
@@ -542,9 +553,13 @@ export function SchedulePublicationModal({
       const isVideo = file.type.startsWith("video/");
       const previewUrl = URL.createObjectURL(file);
       let durationSeconds: number | undefined = undefined;
+      let width: number | undefined;
+      let height: number | undefined;
       try {
         const meta = await extractAndValidateMedia(file);
         durationSeconds = meta.durationSeconds || undefined;
+        width = meta.width || undefined;
+        height = meta.height || undefined;
       } catch {
         // Ignore validation error on preview
       }
@@ -556,6 +571,8 @@ export function SchedulePublicationModal({
         mediaType: isVideo ? "VIDEO" : "IMAGE",
         title: file.name.replace(/\.[^/.]+$/, ""),
         durationSeconds,
+        width,
+        height,
       });
     }
 
@@ -636,6 +653,10 @@ export function SchedulePublicationModal({
       previewUrl: pf.previewUrl,
       mediaType: pf.mediaType,
       durationSeconds: pf.durationSeconds,
+      width: pf.width,
+      height: pf.height,
+      fileSizeBytes: pf.file.size,
+      mimeType: pf.file.type,
       file: pf.file,
     }));
 
@@ -649,6 +670,10 @@ export function SchedulePublicationModal({
         previewUrl: c.media_url,
         mediaType: c.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
         durationSeconds: c.duration_seconds || probedDurations[c.id],
+        width: c.width,
+        height: c.height,
+        fileSizeBytes: c.file_size_bytes,
+        mimeType: c.mime_type,
         contentId: c.id,
       }));
 
@@ -1149,6 +1174,47 @@ export function SchedulePublicationModal({
     }
   };
 
+  const checkCrossPost = (videos: CrossPostVideo[], descriptions: string[]): string | null => {
+    const issue = validateCrossPost(crossPost, videos);
+    if (issue) return issue;
+    if (crossPost.tiktokAccountId && descriptions.some((text) => text.length > 2200)) {
+      return "A legenda do TikTok deve ter até 2200 caracteres.";
+    }
+    if (crossPost.youtubeAccountId && descriptions.some((text) => new TextEncoder().encode(text).length > 5000)) {
+      return "A descrição do YouTube deve ter até 5000 bytes.";
+    }
+    return null;
+  };
+
+  const publishSocialNow = async (content: CriafyContent, text: string) => {
+    if (!activeCompanyId) return;
+    const jobs: Promise<unknown>[] = [];
+    if (crossPost.tiktokAccountId) {
+      jobs.push(criafyService.publishTikTokVideo(activeCompanyId, crossPost.tiktokAccountId,
+        content.id, tikTokOptions(crossPost, text)).then(() => toast.success("Vídeo enviado ao TikTok.")));
+    }
+    if (crossPost.youtubeAccountId) {
+      jobs.push((async () => {
+        const options = youTubeOptions(crossPost, content.title || "Short", text);
+        const publication = await criafyService.startYouTubeShort(activeCompanyId,
+          crossPost.youtubeAccountId, content.id, options, crypto.randomUUID());
+        let current = publication;
+        while (!current.youtube_video_id) {
+          const step = await criafyService.advanceYouTubeShort(activeCompanyId,
+            crossPost.youtubeAccountId, publication.id);
+          current = step.publication;
+        }
+        toast.success("Short enviado ao YouTube. Acompanhe o processamento em Publicações.");
+      })());
+    }
+    const results = await Promise.allSettled(jobs);
+    for (const result of results) {
+      if (result.status === "rejected") toast.error(result.reason instanceof Error
+        ? result.reason.message : "Falha ao enviar para uma das redes.");
+    }
+    onSuccess?.();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCompanyId || !targetAccountId) {
@@ -1166,6 +1232,13 @@ export function SchedulePublicationModal({
         );
         return;
       }
+
+      const bulkCrossPostIssue = checkCrossPost(plannedBulkSlots.map((slot) => ({
+        title: slot.item.title, duration_seconds: slot.item.durationSeconds,
+        width: slot.item.width, height: slot.item.height,
+        file_size_bytes: slot.item.fileSizeBytes, mime_type: slot.item.mimeType,
+      })), [...bulkCaptionVariations, ...Object.values(specificItemCaptions)]);
+      if (bulkCrossPostIssue) { toast.error(bulkCrossPostIssue); return; }
 
       setSubmitting(true);
       try {
@@ -1244,6 +1317,7 @@ export function SchedulePublicationModal({
         );
 
         const pubPayloads: Array<any> = [];
+        const socialSlots: Array<{ contentId: string; title: string; caption: string; scheduledAt: string }> = [];
         let reelCounter = 0;
         const validVariations = bulkCaptionVariations
           .map((c) => c.trim())
@@ -1305,9 +1379,33 @@ export function SchedulePublicationModal({
                 : undefined,
             });
           });
+          if (crossPost.tiktokAccountId || crossPost.youtubeAccountId) {
+            const reel = pubPayloads.find((pub) => pub.content_id === contentId &&
+              pub.publication_type === "REEL" && pub.scheduled_at === slot.scheduledAt.toISOString());
+            socialSlots.push({ contentId, title: slot.item.title,
+              caption: reel?.caption || specificItemCaptions[slot.item.key]?.trim() || validVariations[0] || "",
+              scheduledAt: slot.scheduledAt.toISOString() });
+          }
         });
 
         await criafyService.createPublicationSequence(pubPayloads);
+        let socialFailures = 0;
+        for (const slot of socialSlots) {
+          if (crossPost.tiktokAccountId) {
+            try {
+              await criafyService.scheduleCrossPost(activeCompanyId, crossPost.tiktokAccountId,
+                slot.contentId, slot.scheduledAt, "TIKTOK", tikTokOptions(crossPost, slot.caption));
+            } catch { socialFailures++; }
+          }
+          if (crossPost.youtubeAccountId) {
+            try {
+              await criafyService.scheduleCrossPost(activeCompanyId, crossPost.youtubeAccountId,
+                slot.contentId, slot.scheduledAt, "YOUTUBE",
+                youTubeOptions(crossPost, slot.title, slot.caption));
+            } catch { socialFailures++; }
+          }
+        }
+        if (socialFailures) toast.error(`${socialFailures} publicação(ões) no TikTok/YouTube não puderam ser agendadas. Confira Publicações.`);
 
         if (failedUploadItems.length > 0) {
           toast.warning(
@@ -1328,6 +1426,7 @@ export function SchedulePublicationModal({
         }
 
         pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        setCrossPost(emptyCrossPost);
         setPendingFiles([]);
         setSelectedBulkLibraryIds([]);
         setCustomOrderedKeys(null);
@@ -1374,12 +1473,20 @@ export function SchedulePublicationModal({
         const selectedContent = contents.find(
           (c) => c.id === selectedContentId
         );
+        const singleCrossPostIssue = checkCrossPost(selectedContent ? [{
+          ...selectedContent, duration_seconds: getMediaDuration(selectedContent),
+        }] : [], [caption]);
+        if (singleCrossPostIssue) {
+          toast.error(singleCrossPostIssue);
+          setSubmitting(false);
+          return;
+        }
         const dur = getMediaDuration(selectedContent);
         const isTooLong =
           selectedContent?.media_type === "VIDEO" && dur && dur > 60;
 
         // Filtra automaticamente STORY_VIDEO caso o vídeo tenha > 60s para evitar qualquer erro
-        let formatsToCreate =
+        let formatsToCreate: CriafyPublicationType[] =
           selectedSingleFormats.length > 0 ? selectedSingleFormats : ["REEL"];
         if (isTooLong) {
           formatsToCreate = formatsToCreate.filter((f) => f !== "STORY_VIDEO");
@@ -1453,7 +1560,26 @@ export function SchedulePublicationModal({
               });
               onSuccess?.();
             });
+          if (selectedContent && (crossPost.tiktokAccountId || crossPost.youtubeAccountId)) {
+            void publishSocialNow(selectedContent, caption);
+          }
         } else {
+          let socialFailure = false;
+          if (selectedContent && crossPost.tiktokAccountId) {
+            try {
+              await criafyService.scheduleCrossPost(activeCompanyId, crossPost.tiktokAccountId,
+                selectedContent.id, baseScheduledDate.toISOString(), "TIKTOK",
+                tikTokOptions(crossPost, caption));
+            } catch { socialFailure = true; }
+          }
+          if (selectedContent && crossPost.youtubeAccountId) {
+            try {
+              await criafyService.scheduleCrossPost(activeCompanyId, crossPost.youtubeAccountId,
+                selectedContent.id, baseScheduledDate.toISOString(), "YOUTUBE",
+                youTubeOptions(crossPost, selectedContent.title || "Short", caption));
+            } catch { socialFailure = true; }
+          }
+          if (socialFailure) toast.error("Instagram agendado, mas uma das outras redes falhou. Confira Publicações antes de tentar novamente.");
           toast.success(
             formatsToCreate.length > 1
               ? "Agendado como Reels e Stories (os dois) no calendário!"
@@ -3399,6 +3525,11 @@ export function SchedulePublicationModal({
               )}
             </div>
           )}
+
+          {activeCompanyId && (mode === "SINGLE" || mode === "BULK") &&
+            <CrossPostSettings companyId={activeCompanyId} value={crossPost}
+              onChange={setCrossPost} isBulk={mode === "BULK"}
+              isScheduled={mode === "BULK" || !isPublishNow} />}
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-muted">

@@ -79,17 +79,42 @@ Deno.serve(async (request) => {
     const authorization = request.headers.get("Authorization");
     if (!authorization) return reply({ error: "Sessão necessária." }, 401);
     const supabaseUrl = youtubeEnv("SUPABASE_URL");
-    const userClient = createClient(supabaseUrl, youtubeEnv("SUPABASE_ANON_KEY"), {
+    const admin = createClient(supabaseUrl, youtubeEnv("SUPABASE_SERVICE_ROLE_KEY"));
+    const serviceMode = authorization === `Bearer ${youtubeEnv("SUPABASE_SERVICE_ROLE_KEY")}`;
+    const userClient = serviceMode ? null : createClient(supabaseUrl, youtubeEnv("SUPABASE_ANON_KEY"), {
       global: { headers: { Authorization: authorization } },
     });
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) return reply({ error: "Sessão inválida." }, 401);
-    const admin = createClient(supabaseUrl, youtubeEnv("SUPABASE_SERVICE_ROLE_KEY"));
-    const { action, companyId, accountId, contentId, options, requestId, publicationId } = await request.json();
+    const { data: { user }, error: userError } = userClient
+      ? await userClient.auth.getUser() : { data: { user: null }, error: null };
+    if (!serviceMode && (userError || !user)) return reply({ error: "Sessão inválida." }, 401);
+    let { action, companyId, accountId, contentId, options, requestId, publicationId } = await request.json();
+    let scheduledPublication: Record<string, any> | null = null;
+    if (serviceMode) {
+      if (!publicationId || !["run-scheduled", "upload-step", "status"].includes(action)) {
+        return reply({ error: "Ação de agendamento inválida." }, 403);
+      }
+      const { data } = await admin.from("criafy_publications")
+        .select("id,company_id,social_account_id,content_id,youtube_options,youtube_request_id,status,scheduled_at")
+        .eq("id", publicationId).eq("publication_type", "YOUTUBE_SHORT")
+        .not("scheduled_at", "is", null).single();
+      if (!data || (action === "run-scheduled" &&
+          (data.status !== "SCHEDULED" || new Date(data.scheduled_at).getTime() > Date.now())) ||
+          (action !== "run-scheduled" && data.status !== "PUBLISHING")) {
+        return reply({ error: "Short agendado não encontrado ou fora do horário." }, 404);
+      }
+      companyId = data.company_id; accountId = data.social_account_id;
+      if (action === "run-scheduled") {
+        scheduledPublication = data;
+        action = "start"; contentId = data.content_id; requestId = data.youtube_request_id;
+        options = { ...data.youtube_options, consent: Boolean(data.youtube_options?.consented_at) };
+      }
+    }
     if (!companyId || !accountId) return reply({ error: "Workspace ou canal ausente." }, 400);
-    const { data: member } = await admin.from("company_members").select("id")
-      .eq("company_id", companyId).eq("user_id", user.id).eq("is_active", true).maybeSingle();
-    if (!member) return reply({ error: "Sem acesso ao workspace." }, 403);
+    if (!serviceMode) {
+      const { data: member } = await admin.from("company_members").select("id")
+        .eq("company_id", companyId).eq("user_id", user!.id).eq("is_active", true).maybeSingle();
+      if (!member) return reply({ error: "Sem acesso ao workspace." }, 403);
+    }
     const { data: account } = await admin.from("criafy_social_accounts")
       .select("id,connection_status").eq("id", accountId).eq("company_id", companyId)
       .eq("provider", "YOUTUBE").single();
@@ -220,7 +245,7 @@ Deno.serve(async (request) => {
     if (action !== "start" || !contentId || !options || !requestId) {
       return reply({ error: "Solicitação de Short incompleta." }, 400);
     }
-    const { data: previous } = await admin.from("criafy_publications")
+    const { data: previous } = scheduledPublication ? { data: null } : await admin.from("criafy_publications")
       .select("id,status,youtube_video_id,youtube_uploaded_bytes")
       .eq("company_id", companyId).eq("youtube_request_id", requestId).maybeSingle();
     if (previous) return reply({ success: true, publication: previous });
@@ -230,8 +255,10 @@ Deno.serve(async (request) => {
     if (!content) return reply({ error: "Vídeo não encontrado neste workspace." }, 404);
     validateShort(options, content);
     safeMediaUrl(content.media_url, companyId);
-    const { data: publication, error: insertError } = await admin.from("criafy_publications")
-      .insert({
+    const publicationMutation = scheduledPublication
+      ? admin.from("criafy_publications").update({ status: "PUBLISHING", updated_at: new Date().toISOString() })
+        .eq("id", scheduledPublication.id).eq("company_id", companyId).eq("status", "SCHEDULED")
+      : admin.from("criafy_publications").insert({
         company_id: companyId, account_id: null, social_account_id: accountId,
         content_id: content.id, publication_type: "YOUTUBE_SHORT",
         caption: options.title.trim(), status: "PUBLISHING",
@@ -240,8 +267,10 @@ Deno.serve(async (request) => {
           privacy: options.privacy, madeForKids: options.madeForKids,
           containsSyntheticMedia: options.containsSyntheticMedia,
           consented_at: new Date().toISOString(),
-        }, created_by: user.id,
-      }).select("id,status,youtube_video_id,youtube_uploaded_bytes").single();
+        }, created_by: user!.id,
+      });
+    const { data: publication, error: insertError } = await publicationMutation
+      .select("id,status,youtube_video_id,youtube_uploaded_bytes").single();
     if (insertError || !publication) throw new Error(insertError?.message || "Falha ao registrar Short.");
     const init = await fetch(
       "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",

@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createCriafyOAuthState, verifyCriafyOAuthState } from "../_shared/criafyOAuthState.ts";
-import { YOUTUBE_READ_SCOPE, YOUTUBE_UPLOAD_SCOPE, youtubeEnv, youtubeJson, youtubeTokenRequest } from "../_shared/criafyYouTubeApi.ts";
+import { YOUTUBE_READ_SCOPE, YOUTUBE_UPLOAD_SCOPE, usableYouTubeToken, youtubeEnv, youtubeJson, youtubeTokenRequest } from "../_shared/criafyYouTubeApi.ts";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +30,26 @@ Deno.serve(async (request) => {
     const { data: member } = await admin.from("company_members").select("id")
       .eq("company_id", companyId).eq("user_id", user.id).eq("is_active", true).maybeSingle();
     if (!member) return respond({ error: "Sem acesso ao workspace." }, 403);
+
+    if (action === "stats") {
+      if (!accountId) return respond({ error: "Canal ausente." }, 400);
+      const { data: account } = await admin.from("criafy_social_accounts")
+        .select("id,provider_account_id").eq("id", accountId)
+        .eq("company_id", companyId).eq("provider", "YOUTUBE").single();
+      if (!account) return respond({ error: "Canal não encontrado." }, 404);
+      const token = await usableYouTubeToken(admin, companyId, accountId);
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(account.provider_account_id)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const data = await youtubeJson(response);
+      const stats = data.items?.[0]?.statistics;
+      return respond({ success: true, stats: {
+        followers: stats?.hiddenSubscriberCount ? null : Number(stats?.subscriberCount ?? NaN),
+        posts: Number(stats?.videoCount ?? NaN),
+        views: Number(stats?.viewCount ?? NaN),
+      } });
+    }
 
     if (action === "disconnect") {
       if (!accountId) return respond({ error: "Canal ausente." }, 400);

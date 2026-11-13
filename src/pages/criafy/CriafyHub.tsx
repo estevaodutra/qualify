@@ -9,8 +9,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   Instagram,
-  Music,
-  Youtube,
   Sparkles,
   Plus,
   BookOpen,
@@ -55,6 +53,7 @@ import { YouTubeShortModal } from "@/components/criafy/YouTubeShortModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
+import { SocialAccountCompactCard } from "@/components/criafy/SocialAccountCompactCard";
 import { AccountInsightsModal } from "@/components/criafy/AccountInsightsModal";
 import { ConnectionValidationModal } from "@/components/criafy/ConnectionValidationModal";
 import { useCriafyAutoScheduler } from "@/hooks/useCriafyAutoScheduler";
@@ -983,52 +982,35 @@ export default function CriafyHub() {
                 </div>
               </div>
 
+              <div className={accountViewMode === "grid"
+                ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
+                : "space-y-3"}>
               {tikTokAccounts.filter((account) =>
                 !searchAccountQuery.trim() || account.display_name.toLowerCase()
                   .includes(searchAccountQuery.toLowerCase())
               ).map((account) => (
-                <Card key={account.id} className="border-border/70">
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-cyan-400">
-                      <Music className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{account.display_name}</p>
-                      <p className="text-xs text-muted-foreground">TikTok · {account.connection_status === "CONNECTED" ? "Conectada" : account.connection_status}</p>
-                    </div>
-                    <Button size="sm" variant="outline" disabled={account.connection_status !== "CONNECTED"} onClick={() => setPostingTikTokAccount(account)}>
-                      Publicar vídeo
-                    </Button>
-                  </CardContent>
-                </Card>
+                <SocialAccountCompactCard key={account.id} account={account}
+                  onPublish={() => setPostingTikTokAccount(account)}
+                  onAuthorizeStats={() => { void criafyService.getTikTokOAuthUrl(account.company_id, true)
+                    .then((url) => { window.location.href = url; })
+                    .catch((error) => toast.error(error.message)); }} />
               ))}
 
               {youTubeAccounts.filter((account) =>
                 !searchAccountQuery.trim() || account.display_name.toLowerCase()
                   .includes(searchAccountQuery.toLowerCase())
               ).map((account) => (
-                <Card key={account.id} className="border-border/70">
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-white">
-                      <Youtube className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{account.display_name}</p>
-                      <p className="text-xs text-muted-foreground">YouTube · {account.connection_status === "CONNECTED" ? "Conectado" : account.connection_status}</p>
-                    </div>
-                    <Button size="sm" variant="outline" disabled={account.connection_status !== "CONNECTED"}
-                      onClick={() => setPostingYouTubeAccount(account)}>Publicar Short</Button>
-                    <Button size="sm" variant="ghost" disabled={disconnectingYouTubeId === account.id}
-                      onClick={() => void disconnectYouTube(account)}>Desconectar</Button>
-                  </CardContent>
-                </Card>
+                <SocialAccountCompactCard key={account.id} account={account}
+                  onPublish={() => setPostingYouTubeAccount(account)}
+                  onDisconnect={() => void disconnectYouTube(account)}
+                  disconnecting={disconnectingYouTubeId === account.id} />
               ))}
 
               {loading ? (
                 <div className="flex justify-center p-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : accounts.length === 0 ? (
+              ) : accounts.length === 0 && tikTokAccounts.length === 0 && youTubeAccounts.length === 0 ? (
                 <Card className="border-dashed bg-card/50">
                   <CardContent className="flex flex-col items-center justify-center p-8 text-center">
                     <div className="p-3 rounded-full bg-pink-500/10 text-pink-500 mb-3">
@@ -1073,6 +1055,7 @@ export default function CriafyHub() {
                 });
 
                 if (filtered.length === 0) {
+                  if (tikTokAccounts.length > 0 || youTubeAccounts.length > 0) return null;
                   return (
                     <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-2xl bg-card/30">
                       Nenhuma conta encontrada com o termo "{searchAccountQuery}".
@@ -1081,13 +1064,7 @@ export default function CriafyHub() {
                 }
 
                 return (
-                  <div
-                    className={
-                      accountViewMode === "grid"
-                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
-                        : "space-y-3"
-                    }
-                  >
+                  <>
                     {filtered.map((account) => (
                       <AccountCompactCard
                         key={account.id}
@@ -1100,9 +1077,10 @@ export default function CriafyHub() {
                         isSyncing={syncingAccountId === account.id}
                       />
                     ))}
-                  </div>
+                  </>
                 );
               })()}
+              </div>
             </div>
           )}
 

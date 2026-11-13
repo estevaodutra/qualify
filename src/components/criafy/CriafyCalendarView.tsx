@@ -21,6 +21,8 @@ import {
   ChevronRight,
   Clock,
   Instagram,
+  Music,
+  Youtube,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -471,7 +473,7 @@ export function CriafyCalendarView({
                               ? "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300"
                               : "bg-sky-500/10 border-sky-500/30 text-sky-800 dark:text-sky-300"
                           }`}
-                          title={`@${pub.account?.username} • ${pub.publication_type} (${timeStr})`}
+                          title={`${pub.social_account?.display_name || `@${pub.account?.username}`} • ${pub.publication_type} (${timeStr})`}
                         >
                           <div className="flex items-center gap-1 truncate min-w-0">
                             {isReel ? (
@@ -495,6 +497,10 @@ export function CriafyCalendarView({
                                   : "Reel"
                                 : pub.publication_type === "FEED"
                                 ? "Feed"
+                                : pub.publication_type === "TIKTOK_VIDEO"
+                                ? "TikTok"
+                                : pub.publication_type === "YOUTUBE_SHORT"
+                                ? "Short"
                                 : "Story"}
                             </span>
                           </div>
@@ -712,7 +718,7 @@ export function CriafyCalendarView({
                                 <Avatar className="w-3.5 h-3.5">
                                   <AvatarImage
                                     src={
-                                      pub.account?.profile_picture_url ||
+                                      pub.social_account?.avatar_url || pub.account?.profile_picture_url ||
                                       undefined
                                     }
                                   />
@@ -721,7 +727,7 @@ export function CriafyCalendarView({
                                   </AvatarFallback>
                                 </Avatar>
                                 <span className="truncate">
-                                  @{pub.account?.username}
+                                  {pub.social_account?.display_name || `@${pub.account?.username}`}
                                 </span>
                               </div>
 
@@ -779,8 +785,12 @@ export function CriafyCalendarView({
               <DialogHeader>
                 <div className="flex items-center justify-between">
                   <DialogTitle className="text-base font-bold flex items-center gap-2">
-                    <Instagram className="w-4 h-4 text-pink-500" />
-                    Publicação @{selectedPub.account?.username}
+                    {selectedPub.publication_type === "TIKTOK_VIDEO"
+                      ? <Music className="w-4 h-4" />
+                      : selectedPub.publication_type === "YOUTUBE_SHORT"
+                      ? <Youtube className="w-4 h-4 text-red-600" />
+                      : <Instagram className="w-4 h-4 text-pink-500" />}
+                    Publicação {selectedPub.social_account?.display_name || `@${selectedPub.account?.username}`}
                   </DialogTitle>
                   <Badge
                     variant="outline"
@@ -898,7 +908,9 @@ export function CriafyCalendarView({
               </div>
 
               {/* Action Button: Publish Now for Scheduled or Failed */}
-              {(selectedPub.status === "SCHEDULED" || selectedPub.status === "FAILED") && (
+              {(selectedPub.status === "SCHEDULED" || selectedPub.status === "FAILED") &&
+                selectedPub.publication_type !== "TIKTOK_VIDEO" &&
+                selectedPub.publication_type !== "YOUTUBE_SHORT" && (
                 <div className="pt-1">
                   <Button
                     type="button"
@@ -925,7 +937,7 @@ export function CriafyCalendarView({
               <div className="space-y-2 pt-2 border-t border-muted">
                 <h4 className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Histórico
-                  de Disparos e Auditoria Meta
+                  de Disparos e Auditoria
                 </h4>
 
                 {loadingAttempts ? (

@@ -39,6 +39,9 @@ import { CriafySubsidebar, CriafySubsidebarGroup } from "./CriafySubsidebar";
 import { QueueRulesView } from "./QueueRulesView";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
+import { CrossPostSettings, emptyCrossPost, tikTokOptions, youTubeOptions,
+  validateCrossPost } from "./CrossPostSettings";
+import type { CrossPostSelection } from "./CrossPostSettings";
 import {
   CriafyPublication,
   CriafyInstagramAccount,
@@ -120,6 +123,7 @@ export function PublicationsView({
   const [caption, setCaption] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [isPublishNow, setIsPublishNow] = useState(true);
+  const [crossPost, setCrossPost] = useState<CrossPostSelection>(emptyCrossPost);
 
   useEffect(() => {
     if (activeCompanyId) {
@@ -175,6 +179,7 @@ export function PublicationsView({
     setCaption("");
     setScheduledAt("");
     setIsPublishNow(true);
+    setCrossPost(emptyCrossPost);
     setModalOpen(true);
   };
 
@@ -234,6 +239,18 @@ export function PublicationsView({
     }
 
     const selectedContent = contents.find((c) => c.id === selectedContentId);
+    if (publicationType !== "REEL" && (crossPost.tiktokAccountId || crossPost.youtubeAccountId)) {
+      toast.error("Escolha Reel no Instagram para publicar o mesmo vídeo nas outras redes.");
+      return;
+    }
+    const crossPostIssue = validateCrossPost(crossPost, selectedContent ? [selectedContent] : []);
+    if (crossPostIssue) { toast.error(crossPostIssue); return; }
+    if (crossPost.tiktokAccountId && caption.length > 2200) {
+      toast.error("A legenda do TikTok deve ter até 2200 caracteres."); return;
+    }
+    if (crossPost.youtubeAccountId && new TextEncoder().encode(caption).length > 5000) {
+      toast.error("A descrição do YouTube deve ter até 5000 bytes."); return;
+    }
     if (publicationType === "STORY_VIDEO" && selectedContent?.duration_seconds && selectedContent.duration_seconds > 60) {
       toast.error(
         `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(selectedContent.duration_seconds)}s). Altere para "Reel" para publicar vídeos com mais de 60 segundos.`
@@ -256,6 +273,26 @@ export function PublicationsView({
       });
 
       if (isPublishNow) {
+        if (selectedContent && crossPost.tiktokAccountId) {
+          void criafyService.publishTikTokVideo(activeCompanyId, crossPost.tiktokAccountId,
+            selectedContent.id, tikTokOptions(crossPost, caption))
+            .then(() => toast.success("Vídeo enviado ao TikTok."))
+            .catch((error) => toast.error(`TikTok: ${error.message}`));
+        }
+        if (selectedContent && crossPost.youtubeAccountId) {
+          void (async () => {
+            const short = await criafyService.startYouTubeShort(activeCompanyId,
+              crossPost.youtubeAccountId, selectedContent.id,
+              youTubeOptions(crossPost, selectedContent.title || "Short", caption), crypto.randomUUID());
+            let current = short;
+            while (!current.youtube_video_id) {
+              current = (await criafyService.advanceYouTubeShort(activeCompanyId,
+                crossPost.youtubeAccountId, short.id)).publication;
+            }
+            toast.success("Short enviado ao YouTube. Acompanhe em Publicações.");
+            loadData(true);
+          })().catch((error) => toast.error(`YouTube: ${error.message}`));
+        }
         setModalOpen(false);
         setSubmitting(false);
 
@@ -293,6 +330,22 @@ export function PublicationsView({
           });
         return;
       } else {
+        let socialFailure = false;
+        if (selectedContent && crossPost.tiktokAccountId) {
+          try {
+            await criafyService.scheduleCrossPost(activeCompanyId, crossPost.tiktokAccountId,
+              selectedContent.id, new Date(scheduledAt).toISOString(), "TIKTOK",
+              tikTokOptions(crossPost, caption));
+          } catch { socialFailure = true; }
+        }
+        if (selectedContent && crossPost.youtubeAccountId) {
+          try {
+            await criafyService.scheduleCrossPost(activeCompanyId, crossPost.youtubeAccountId,
+              selectedContent.id, new Date(scheduledAt).toISOString(), "YOUTUBE",
+              youTubeOptions(crossPost, selectedContent.title || "Short", caption));
+          } catch { socialFailure = true; }
+        }
+        if (socialFailure) toast.error("Instagram agendado, mas uma das outras redes falhou. Confira Publicações.");
         toast.success("Publicação agendada com sucesso!");
         loadData(true);
         setModalOpen(false);
@@ -812,6 +865,10 @@ export function PublicationsView({
                 </div>
               )}
             </div>
+
+            {activeCompanyId && publicationType === "REEL" &&
+              <CrossPostSettings companyId={activeCompanyId} value={crossPost}
+                onChange={setCrossPost} isScheduled={!isPublishNow} />}
 
             <DialogFooter className="pt-2">
               <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>

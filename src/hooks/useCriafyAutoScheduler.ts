@@ -53,6 +53,7 @@ export function useCriafyAutoScheduler(
         const duePubs = pubs.filter(
           (p) =>
             p.status === "SCHEDULED" &&
+            ["REEL", "FEED", "STORY_VIDEO", "STORY_IMAGE"].includes(p.publication_type) &&
             p.scheduled_at &&
             new Date(p.scheduled_at) <= now
         );
