@@ -25,11 +25,40 @@ Deno.serve(async (request) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return respond({ error: "Sessão inválida." }, 401);
     const admin = createClient(supabaseUrl, youtubeEnv("SUPABASE_SERVICE_ROLE_KEY"));
-    const { action, companyId, code, state } = await request.json();
+    const { action, companyId, accountId, code, state } = await request.json();
     if (!companyId) return respond({ error: "Workspace não informado." }, 400);
     const { data: member } = await admin.from("company_members").select("id")
       .eq("company_id", companyId).eq("user_id", user.id).eq("is_active", true).maybeSingle();
     if (!member) return respond({ error: "Sem acesso ao workspace." }, 403);
+
+    if (action === "disconnect") {
+      if (!accountId) return respond({ error: "Canal ausente." }, 400);
+      const { data: account } = await admin.from("criafy_social_accounts").select("id")
+        .eq("id", accountId).eq("company_id", companyId).eq("provider", "YOUTUBE").single();
+      if (!account) return respond({ error: "Canal não encontrado." }, 404);
+      const { data: credential } = await admin.from("criafy_youtube_credentials")
+        .select("refresh_token").eq("account_id", accountId).eq("company_id", companyId).maybeSingle();
+      if (credential?.refresh_token) {
+        const revoked = await fetch("https://oauth2.googleapis.com/revoke", {
+          method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ token: credential.refresh_token }),
+        });
+        if (!revoked.ok && revoked.status !== 400) {
+          throw new Error("Google não confirmou a revogação. Tente novamente ou revogue o acesso nas configurações da sua conta Google.");
+        }
+      }
+      const { error: publicationsError } = await admin.from("criafy_publications")
+        .delete().eq("company_id", companyId).eq("social_account_id", accountId)
+        .eq("publication_type", "YOUTUBE_SHORT");
+      if (publicationsError) throw new Error("Acesso revogado, mas o histórico não pôde ser excluído. Tente novamente.");
+      const { error: credentialError } = await admin.from("criafy_youtube_credentials")
+        .delete().eq("company_id", companyId).eq("account_id", accountId);
+      if (credentialError) throw new Error("Acesso revogado, mas as credenciais não puderam ser excluídas. Tente novamente.");
+      const { error: accountError } = await admin.from("criafy_social_accounts")
+        .delete().eq("company_id", companyId).eq("id", accountId);
+      if (accountError) throw new Error("Acesso revogado, mas o canal não pôde ser removido. Tente novamente.");
+      return respond({ success: true });
+    }
 
     const uri = redirectUri();
     if (!uri.startsWith("https://") || new URL(uri).search || new URL(uri).hash) {

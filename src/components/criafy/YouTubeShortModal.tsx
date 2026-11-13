@@ -125,7 +125,8 @@ export function YouTubeShortModal({ open, onOpenChange, companyId, account }: Pr
         <label className="flex gap-2"><input type="checkbox" checked={synthetic}
           onChange={(event) => setSynthetic(event.target.checked)} /> Contém mídia sintética ou alterada de forma realista</label>
         <label className="flex gap-2 rounded-md border p-3"><input type="checkbox" checked={consent}
-          onChange={(event) => setConsent(event.target.checked)} /> Confirmo que tenho direito de publicar este vídeo e autorizo seu envio ao canal YouTube selecionado.</label>
+          onChange={(event) => setConsent(event.target.checked)} />
+          <span>Confirmo que tenho direito de publicar este vídeo e autorizo seu envio ao canal selecionado, conforme os <a className="underline" href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">Termos do YouTube</a>.</span></label>
         {uploading && <p role="status">Enviando vídeo: {progress}%. Mantenha esta página aberta até o envio terminar.</p>}
       </div>}
       <DialogFooter>

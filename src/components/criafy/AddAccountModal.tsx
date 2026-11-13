@@ -37,6 +37,7 @@ type SocialPlatform = "instagram" | "tiktok" | "youtube";
 export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountModalProps) {
   const { activeCompanyId } = useCompany();
   const [selectedPlatform, setSelectedPlatform] = useState<SocialPlatform>("instagram");
+  const [acceptedYouTubePrivacy, setAcceptedYouTubePrivacy] = useState(false);
 
   // Estados de conexão OAuth e compartilhamento de link
   const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
     }
 
     if (!open) {
+      setAcceptedYouTubePrivacy(false);
       setCopied(false);
       setLoadingConnect(false);
       if (popupMessageListenerRef.current) {
@@ -523,8 +525,13 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
             <p className="text-xs text-muted-foreground">
               Você será redirecionado ao Google para autorizar upload de vídeos e identificar seu canal.
             </p>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={acceptedYouTubePrivacy}
+                onChange={(event) => setAcceptedYouTubePrivacy(event.target.checked)} />
+              <span>Li e aceito a <a href="/politica-de-privacidade" target="_blank" rel="noreferrer" className="underline">Política de Privacidade</a> e os <a href="/termos-de-uso" target="_blank" rel="noreferrer" className="underline">Termos do Criafy</a>, incluindo os <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer" className="underline">Termos do YouTube</a>.</span>
+            </label>
             <Button type="button" className="w-full gap-2 bg-red-600 text-white hover:bg-red-700"
-              onClick={handleYouTubeConnect} disabled={loadingConnect}>
+              onClick={handleYouTubeConnect} disabled={loadingConnect || !acceptedYouTubePrivacy}>
               {loadingConnect ? <Loader2 className="h-4 w-4 animate-spin" /> : <Youtube className="h-4 w-4" />}
               Autorizar com Google
             </Button>

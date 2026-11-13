@@ -183,6 +183,7 @@ export default function CriafyHub() {
   const [youTubeAccounts, setYouTubeAccounts] = useState<CriafySocialAccount[]>([]);
   const [postingTikTokAccount, setPostingTikTokAccount] = useState<CriafySocialAccount | null>(null);
   const [postingYouTubeAccount, setPostingYouTubeAccount] = useState<CriafySocialAccount | null>(null);
+  const [disconnectingYouTubeId, setDisconnectingYouTubeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const accountLoadSequenceRef = useRef(0);
   const processedOAuthCallbackRef = useRef<string | null>(null);
@@ -462,6 +463,18 @@ export default function CriafyHub() {
     } finally {
       if (sequence === accountLoadSequenceRef.current) setLoading(false);
     }
+  };
+
+  const disconnectYouTube = async (account: CriafySocialAccount) => {
+    if (!activeCompanyId || !window.confirm(`Desconectar ${account.display_name}? O acesso Google e o histórico de Shorts deste canal serão removidos do Criafy.`)) return;
+    setDisconnectingYouTubeId(account.id);
+    try {
+      await criafyService.disconnectYouTubeAccount(activeCompanyId, account.id);
+      toast.success("Canal YouTube desconectado e acesso revogado.");
+      await loadAccounts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao desconectar o canal.");
+    } finally { setDisconnectingYouTubeId(null); }
   };
 
   useEffect(() => {
@@ -1005,6 +1018,8 @@ export default function CriafyHub() {
                     </div>
                     <Button size="sm" variant="outline" disabled={account.connection_status !== "CONNECTED"}
                       onClick={() => setPostingYouTubeAccount(account)}>Publicar Short</Button>
+                    <Button size="sm" variant="ghost" disabled={disconnectingYouTubeId === account.id}
+                      onClick={() => void disconnectYouTube(account)}>Desconectar</Button>
                   </CardContent>
                 </Card>
               ))}

@@ -82,6 +82,15 @@ export const criafyService = {
     return data.account;
   },
 
+  async disconnectYouTubeAccount(companyId: string, accountId: string): Promise<void> {
+    const { data, error } = await supabase.functions.invoke("criafy-youtube-oauth", {
+      body: { action: "disconnect", companyId, accountId },
+    });
+    if (error || !data?.success) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao desconectar o YouTube."));
+    }
+  },
+
   async startYouTubeShort(companyId: string, accountId: string, contentId: string,
     options: CriafyYouTubeShortOptions, requestId: string):
     Promise<{ id: string; status: string; youtube_video_id?: string; youtube_uploaded_bytes?: number }> {
