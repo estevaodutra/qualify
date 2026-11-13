@@ -137,7 +137,7 @@ export function TikTokPostModal({ open, onOpenChange, companyId, account }: Prop
         <label className="flex gap-2 rounded-md border p-3"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
           <span>Ao publicar, concordo com a <a className="underline" href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noreferrer">Confirmação de Uso de Música do TikTok</a>{brandedContent && <> e a <a className="underline" href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noreferrer">Política de Conteúdo de Marca</a></>}. Confirmo o envio deste vídeo à conta selecionada.</span>
         </label>
-        <p className="text-xs text-muted-foreground">No sandbox, o TikTok pode restringir a publicação a contas e vídeos privados.</p>
+        <p className="text-xs text-muted-foreground">Teste no sandbox: ative <strong>Conta privada</strong> nas configurações de privacidade da própria conta TikTok e selecione <strong>Só eu</strong> acima.</p>
       </div>}
       <DialogFooter>
         <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>

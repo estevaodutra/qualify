@@ -32,7 +32,11 @@ export async function callTikTokApi(url: string, token: string, body?: unknown) 
   });
   const json = await response.json();
   if (!response.ok || json.error?.code !== "ok") {
-    throw new Error(`TikTok API: ${json.error?.message || json.error?.code || response.status}`);
+    const code = String(json.error?.code || "unknown_error");
+    if (code === "unaudited_client_can_only_post_to_private_accounts") {
+      throw new Error("O TikTok exige que a própria conta esteja privada enquanto o aplicativo não for auditado. No TikTok, ative Conta privada em Configurações e privacidade → Privacidade. Depois tente novamente com a visibilidade Só eu.");
+    }
+    throw new Error(`TikTok API (${code}): ${json.error?.message || response.status}${json.error?.log_id ? ` [log ${json.error.log_id}]` : ""}`);
   }
   return json.data;
 }
