@@ -1,4 +1,4 @@
-import { MoreHorizontal, MessageCircle, Calendar, FileText, AlertCircle, Clock, Trash2 } from "lucide-react";
+import { MoreHorizontal, MessageCircle, Calendar, FileText, AlertCircle, Clock, Trash2, Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeadAvatar, LeadTags, LeadOwner, DealValue } from "../shared";
 import { Deal, Lead } from "@/types/crm.types";
@@ -13,6 +13,8 @@ import { cn, formatPhone } from "@/lib/utils";
 import { format } from "date-fns";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { toast } from "sonner";
+import { useState } from "react";
+import { LeadJourneyDialog } from "../journey/LeadJourneyDialog";
 
 interface DealKanbanCardProps {
   deal: Deal & { lead?: Lead };
@@ -25,6 +27,7 @@ interface DealKanbanCardProps {
 
 export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddActivity, onDeleteDeal }: DealKanbanCardProps) {
   const lead = deal.lead;
+  const [journeyOpen, setJourneyOpen] = useState(false);
   
   // Status definitions
   const hasOverdueActivity = false; // Mock - compute from deal.next_activity_at
@@ -53,6 +56,8 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
   };
   
   return (
+    <>
+    <LeadJourneyDialog open={journeyOpen} onOpenChange={setJourneyOpen} companyId={deal.company_id} leadId={lead?.id || deal.lead_id} leadName={lead?.name} />
     <div 
       className={cn(
         "bg-card rounded-lg p-3 shadow-[0_1px_3px_hsl(220_15%_10%/0.08)] border border-border flex flex-col gap-3 cursor-pointer hover:border-primary/40 transition-colors",
@@ -169,6 +174,9 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
             >
               <MessageCircle className="h-3 w-3 text-muted-foreground hover:text-emerald-600 transition-colors" />
             </Button>
+            <Button variant="ghost" size="icon" title="Visualizar trajetória" aria-label="Visualizar trajetória" className="h-6 w-6 bg-secondary hover:bg-primary/10 rounded-md" onClick={(e) => { e.stopPropagation(); setJourneyOpen(true); }}>
+              <Route className="h-3 w-3 text-muted-foreground" />
+            </Button>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -196,5 +204,6 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
         </div>
       )}
     </div>
+    </>
   );
 }
