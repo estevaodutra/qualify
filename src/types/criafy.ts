@@ -4,7 +4,7 @@ export type CriafyMediaType = 'IMAGE' | 'VIDEO';
 
 export type CriafyMetaValidationStatus = 'PENDING' | 'VALID' | 'INVALID';
 
-export type CriafyPublicationType = 'FEED' | 'REEL' | 'STORY_IMAGE' | 'STORY_VIDEO';
+export type CriafyPublicationType = 'FEED' | 'REEL' | 'STORY_IMAGE' | 'STORY_VIDEO' | 'TIKTOK_VIDEO';
 
 export type CriafyPublicationStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELED';
 
@@ -37,6 +37,30 @@ export interface CriafySocialAccount {
   avatar_url?: string | null;
   connection_status: CriafyAccountConnectionStatus;
   created_at: string;
+}
+
+export interface CriafyTikTokCreatorInfo {
+  creator_avatar_url?: string;
+  creator_nickname: string;
+  creator_username: string;
+  privacy_level_options: string[];
+  comment_disabled: boolean;
+  duet_disabled: boolean;
+  stitch_disabled: boolean;
+  max_video_post_duration_sec: number;
+}
+
+export interface CriafyTikTokPostOptions {
+  title: string;
+  privacy_level: string;
+  allow_comment: boolean;
+  allow_duet: boolean;
+  allow_stitch: boolean;
+  commercial_content: boolean;
+  own_brand: boolean;
+  branded_content: boolean;
+  is_aigc: boolean;
+  consent: boolean;
 }
 
 export interface CriafyAccountBriefing {
@@ -136,6 +160,10 @@ export interface CriafyPublication {
   updated_at: string;
   // Hydrated references
   account?: CriafyInstagramAccount;
+  social_account?: CriafySocialAccount;
+  social_account_id?: string | null;
+  tiktok_publish_id?: string | null;
+  tiktok_failure_reason?: string | null;
   content?: CriafyContent;
 }
 

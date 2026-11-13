@@ -4,6 +4,8 @@ import { createEmptyStrategy } from "@/utils/criafyStrategyDefaults";
 import {
   CriafyInstagramAccount,
   CriafySocialAccount,
+  CriafyTikTokCreatorInfo,
+  CriafyTikTokPostOptions,
   CriafyAccountBriefing,
   CriafyContent,
   CriafyQueueRule,
@@ -77,6 +79,38 @@ export const criafyService = {
       throw new Error(await functionErrorMessage(data, error, "Falha ao conectar conta TikTok."));
     }
     return data.account;
+  },
+
+  async getTikTokCreatorInfo(companyId: string, accountId: string): Promise<CriafyTikTokCreatorInfo> {
+    const { data, error } = await supabase.functions.invoke("criafy-tiktok-post", {
+      body: { action: "creator-info", companyId, accountId },
+    });
+    if (error || !data?.success) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao consultar a conta TikTok."));
+    }
+    return data.creator;
+  },
+
+  async publishTikTokVideo(companyId: string, accountId: string, contentId: string,
+    options: CriafyTikTokPostOptions, requestId = crypto.randomUUID()): Promise<{ id: string; status: string }> {
+    const { data, error } = await supabase.functions.invoke("criafy-tiktok-post", {
+      body: { action: "publish", companyId, accountId, contentId, options, requestId },
+    });
+    if (error || !data?.success) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao enviar o vídeo ao TikTok."));
+    }
+    return data.publication;
+  },
+
+  async getTikTokPostStatus(companyId: string, accountId: string, publicationId: string):
+    Promise<{ status: string; fail_reason?: string }> {
+    const { data, error } = await supabase.functions.invoke("criafy-tiktok-post", {
+      body: { action: "status", companyId, accountId, publicationId },
+    });
+    if (error || !data?.success) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao consultar a postagem TikTok."));
+    }
+    return data;
   },
 
   // ==========================================
@@ -703,6 +737,7 @@ export const criafyService = {
       .select(`
         *,
         account:criafy_instagram_accounts(*),
+        social_account:criafy_social_accounts(*),
         content:criafy_contents(*)
       `)
       .eq("company_id", companyId)

@@ -63,6 +63,19 @@ export function PublicationsView({
   const [loading, setLoading] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<string>("agendadas");
 
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    const pending = publications.filter((p) => p.publication_type === "TIKTOK_VIDEO" &&
+      p.status === "PUBLISHING" && p.social_account_id && p.tiktok_publish_id);
+    if (!pending.length) return;
+    const timer = setInterval(() => {
+      void Promise.allSettled(pending.map((p) => criafyService.getTikTokPostStatus(
+        activeCompanyId, p.social_account_id!, p.id,
+      ))).then(() => loadData(true));
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [activeCompanyId, publications]);
+
   // New Publication Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -440,7 +453,7 @@ export function PublicationsView({
 
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-xs">@{pub.account?.username}</span>
+                    <span className="font-bold text-xs">{pub.publication_type === "TIKTOK_VIDEO" ? "TikTok · " : "@"}{pub.social_account?.display_name || pub.account?.username || "Conta"}</span>
                     <Badge variant="outline" className="text-[10px] uppercase font-semibold">
                       {pub.publication_type}
                     </Badge>
@@ -473,6 +486,8 @@ export function PublicationsView({
                   <p className="text-xs text-muted-foreground line-clamp-1 max-w-lg">
                     {pub.caption || "Sem legenda"}
                   </p>
+                  {pub.publication_type === "TIKTOK_VIDEO" && pub.status === "FAILED" && pub.tiktok_failure_reason &&
+                    <p className="text-xs text-destructive">{pub.tiktok_failure_reason}</p>}
 
                   <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <Clock className="w-3 h-3 text-muted-foreground" />
@@ -484,7 +499,7 @@ export function PublicationsView({
               </div>
 
               <div className="flex items-center gap-2 self-end md:self-center">
-                {pub.status === "FAILED" && (
+                {pub.status === "FAILED" && pub.publication_type !== "TIKTOK_VIDEO" && (
                   <Button
                     variant="outline"
                     size="sm"

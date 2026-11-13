@@ -19,6 +19,29 @@ export default async function handler(req) {
 
   try {
     const url = new URL(req.url);
+    const objectPath = url.searchParams.get("path");
+    if (objectPath) {
+      // TikTok PULL_FROM_URL needs a verified first-party URL without a redirect.
+      if (!/^[0-9a-f-]{36}\/[a-zA-Z0-9_./-]+$/.test(objectPath) || objectPath.includes("..")) {
+        return new Response("Invalid media path", { status: 400, headers: corsHeaders });
+      }
+      const upstream = await fetch(`${SUPABASE_PUBLIC_MEDIA_BASE}${objectPath}`, {
+        headers: req.headers.get("range") ? { Range: req.headers.get("range") } : {},
+      });
+      if (!upstream.ok || !upstream.body) {
+        return new Response("Media unavailable", { status: upstream.status, headers: corsHeaders });
+      }
+      const responseHeaders = new Headers(corsHeaders);
+      for (const name of ["content-type", "content-length", "content-range"]) {
+        const value = upstream.headers.get(name);
+        if (value) responseHeaders.set(name, value);
+      }
+      responseHeaders.set("Cache-Control", "public, max-age=3600");
+      return new Response(req.method === "HEAD" ? null : upstream.body, {
+        status: upstream.status,
+        headers: responseHeaders,
+      });
+    }
     const manifestPath = url.searchParams.get("manifest");
     if (!manifestPath) {
       return new Response("Missing manifest parameter", {

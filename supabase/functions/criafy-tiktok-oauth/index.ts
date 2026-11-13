@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createCriafyOAuthState, verifyCriafyOAuthState } from "../_shared/criafyOAuthState.ts";
+import { requestTikTokTokens } from "../_shared/criafyTikTokApi.ts";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -23,23 +24,6 @@ const redirectUri = () => {
     throw new Error("TIKTOK_REDIRECT_URI deve ser uma URL HTTPS fixa.");
   }
   return uri;
-};
-
-const tokenRequest = async (params: Record<string, string>) => {
-  const response = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_key: required("TIKTOK_CLIENT_KEY"),
-      client_secret: required("TIKTOK_CLIENT_SECRET"),
-      ...params,
-    }),
-  });
-  const data = await response.json();
-  if (!response.ok || data.error || !data.access_token || !data.refresh_token) {
-    throw new Error(`TikTok OAuth: ${data.error_description || data.error || response.status}`);
-  }
-  return data;
 };
 
 Deno.serve(async (request) => {
@@ -91,7 +75,7 @@ Deno.serve(async (request) => {
       companyId, userId: user.id, redirectUri: uri, provider: "TIKTOK",
     });
 
-    const token = await tokenRequest({
+    const token = await requestTikTokTokens({
       code: String(code), grant_type: "authorization_code", redirect_uri: uri,
     });
     const grantedScopes = String(token.scope || "").split(",").map((s) => s.trim()).filter(Boolean);

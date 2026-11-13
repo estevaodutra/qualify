@@ -49,6 +49,7 @@ import { QueueRulesView } from "@/components/criafy/QueueRulesView";
 import { CriafyCalendarView } from "@/components/criafy/CriafyCalendarView";
 import { CriafyBrandManualView } from "@/components/criafy/CriafyBrandManualView";
 import { AddAccountModal } from "@/components/criafy/AddAccountModal";
+import { TikTokPostModal } from "@/components/criafy/TikTokPostModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
@@ -177,6 +178,7 @@ export default function CriafyHub() {
 
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
   const [tikTokAccounts, setTikTokAccounts] = useState<CriafySocialAccount[]>([]);
+  const [postingTikTokAccount, setPostingTikTokAccount] = useState<CriafySocialAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const accountLoadSequenceRef = useRef(0);
   const processedOAuthCallbackRef = useRef<string | null>(null);
@@ -961,6 +963,9 @@ export default function CriafyHub() {
                       <p className="truncate text-sm font-semibold">{account.display_name}</p>
                       <p className="text-xs text-muted-foreground">TikTok · {account.connection_status === "CONNECTED" ? "Conectada" : account.connection_status}</p>
                     </div>
+                    <Button size="sm" variant="outline" disabled={account.connection_status !== "CONNECTED"} onClick={() => setPostingTikTokAccount(account)}>
+                      Publicar vídeo
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -1108,6 +1113,12 @@ export default function CriafyHub() {
       </div>
 
       {/* Modals */}
+      {activeCompanyId && <TikTokPostModal
+        open={Boolean(postingTikTokAccount)}
+        onOpenChange={(open) => { if (!open) setPostingTikTokAccount(null); }}
+        companyId={activeCompanyId}
+        account={postingTikTokAccount}
+      />}
       <AddAccountModal
         open={addAccountOpen}
         onOpenChange={setAddAccountOpen}
