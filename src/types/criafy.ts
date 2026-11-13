@@ -4,7 +4,7 @@ export type CriafyMediaType = 'IMAGE' | 'VIDEO';
 
 export type CriafyMetaValidationStatus = 'PENDING' | 'VALID' | 'INVALID';
 
-export type CriafyPublicationType = 'FEED' | 'REEL' | 'STORY_IMAGE' | 'STORY_VIDEO' | 'TIKTOK_VIDEO';
+export type CriafyPublicationType = 'FEED' | 'REEL' | 'STORY_IMAGE' | 'STORY_VIDEO' | 'TIKTOK_VIDEO' | 'YOUTUBE_SHORT';
 
 export type CriafyPublicationStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELED';
 
@@ -31,7 +31,7 @@ export interface CriafyInstagramAccount {
 export interface CriafySocialAccount {
   id: string;
   company_id: string;
-  provider: 'INSTAGRAM' | 'TIKTOK';
+  provider: 'INSTAGRAM' | 'TIKTOK' | 'YOUTUBE';
   provider_account_id: string;
   display_name: string;
   avatar_url?: string | null;
@@ -60,6 +60,15 @@ export interface CriafyTikTokPostOptions {
   own_brand: boolean;
   branded_content: boolean;
   is_aigc: boolean;
+  consent: boolean;
+}
+
+export interface CriafyYouTubeShortOptions {
+  title: string;
+  description: string;
+  privacy: 'private' | 'unlisted' | 'public';
+  madeForKids: boolean;
+  containsSyntheticMedia: boolean;
   consent: boolean;
 }
 
@@ -164,6 +173,9 @@ export interface CriafyPublication {
   social_account_id?: string | null;
   tiktok_publish_id?: string | null;
   tiktok_failure_reason?: string | null;
+  youtube_video_id?: string | null;
+  youtube_failure_reason?: string | null;
+  youtube_uploaded_bytes?: number;
   content?: CriafyContent;
 }
 

@@ -6,6 +6,7 @@ import {
   CriafySocialAccount,
   CriafyTikTokCreatorInfo,
   CriafyTikTokPostOptions,
+  CriafyYouTubeShortOptions,
   CriafyAccountBriefing,
   CriafyContent,
   CriafyQueueRule,
@@ -52,6 +53,63 @@ async function functionErrorMessage(data: unknown, error: unknown, fallback: str
 }
 
 export const criafyService = {
+  async getYouTubeAccounts(companyId: string): Promise<CriafySocialAccount[]> {
+    const { data, error } = await (supabase as any).from("criafy_social_accounts")
+      .select("id,company_id,provider,provider_account_id,display_name,avatar_url,connection_status,created_at")
+      .eq("company_id", companyId).eq("provider", "YOUTUBE")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getYouTubeOAuthUrl(companyId: string): Promise<string> {
+    const { data, error } = await supabase.functions.invoke("criafy-youtube-oauth", {
+      body: { action: "get-auth-url", companyId },
+    });
+    if (error || !data?.success || !data.authUrl) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao iniciar conexão YouTube."));
+    }
+    return data.authUrl;
+  },
+
+  async exchangeYouTubeOAuthCode(companyId: string, code: string, state: string): Promise<CriafySocialAccount> {
+    const { data, error } = await supabase.functions.invoke("criafy-youtube-oauth", {
+      body: { action: "exchange-code", companyId, code, state },
+    });
+    if (error || !data?.success || !data.account) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao conectar canal YouTube."));
+    }
+    return data.account;
+  },
+
+  async startYouTubeShort(companyId: string, accountId: string, contentId: string,
+    options: CriafyYouTubeShortOptions, requestId: string):
+    Promise<{ id: string; status: string; youtube_video_id?: string; youtube_uploaded_bytes?: number }> {
+    const { data, error } = await supabase.functions.invoke("criafy-youtube-post", {
+      body: { action: "start", companyId, accountId, contentId, options, requestId },
+    });
+    if (error || !data?.success) throw new Error(await functionErrorMessage(data, error, "Falha ao iniciar Short."));
+    return data.publication;
+  },
+
+  async advanceYouTubeShort(companyId: string, accountId: string, publicationId: string):
+    Promise<{ publication: CriafyPublication; totalSize?: number }> {
+    const { data, error } = await supabase.functions.invoke("criafy-youtube-post", {
+      body: { action: "upload-step", companyId, accountId, publicationId },
+    });
+    if (error || !data?.success) throw new Error(await functionErrorMessage(data, error, "Falha no upload do Short."));
+    return data;
+  },
+
+  async getYouTubeShortStatus(companyId: string, accountId: string, publicationId: string):
+    Promise<{ publication: CriafyPublication }> {
+    const { data, error } = await supabase.functions.invoke("criafy-youtube-post", {
+      body: { action: "status", companyId, accountId, publicationId },
+    });
+    if (error || !data?.success) throw new Error(await functionErrorMessage(data, error, "Falha ao consultar Short."));
+    return data;
+  },
+
   async getTikTokAccounts(companyId: string): Promise<CriafySocialAccount[]> {
     const { data, error } = await (supabase as any).from("criafy_social_accounts")
       .select("id,company_id,provider,provider_account_id,display_name,avatar_url,connection_status,created_at")

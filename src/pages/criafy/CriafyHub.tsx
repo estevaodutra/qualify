@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   Instagram,
   Music,
+  Youtube,
   Sparkles,
   Plus,
   BookOpen,
@@ -50,6 +51,7 @@ import { CriafyCalendarView } from "@/components/criafy/CriafyCalendarView";
 import { CriafyBrandManualView } from "@/components/criafy/CriafyBrandManualView";
 import { AddAccountModal } from "@/components/criafy/AddAccountModal";
 import { TikTokPostModal } from "@/components/criafy/TikTokPostModal";
+import { YouTubeShortModal } from "@/components/criafy/YouTubeShortModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
@@ -178,7 +180,9 @@ export default function CriafyHub() {
 
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
   const [tikTokAccounts, setTikTokAccounts] = useState<CriafySocialAccount[]>([]);
+  const [youTubeAccounts, setYouTubeAccounts] = useState<CriafySocialAccount[]>([]);
   const [postingTikTokAccount, setPostingTikTokAccount] = useState<CriafySocialAccount | null>(null);
+  const [postingYouTubeAccount, setPostingYouTubeAccount] = useState<CriafySocialAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const accountLoadSequenceRef = useRef(0);
   const processedOAuthCallbackRef = useRef<string | null>(null);
@@ -434,6 +438,7 @@ export default function CriafyHub() {
     setLoading(true);
     setAccounts([]);
     setTikTokAccounts([]);
+    setYouTubeAccounts([]);
     try {
       const instagram = await criafyService.getAccounts(activeCompanyId);
       if (sequence !== accountLoadSequenceRef.current) return;
@@ -444,6 +449,13 @@ export default function CriafyHub() {
       } catch (tiktokError) {
         console.warn("Contas TikTok indisponíveis até a migration ser aplicada:", tiktokError);
         if (sequence === accountLoadSequenceRef.current) setTikTokAccounts([]);
+      }
+      try {
+        const youtube = await criafyService.getYouTubeAccounts(activeCompanyId);
+        if (sequence === accountLoadSequenceRef.current) setYouTubeAccounts(youtube);
+      } catch (youtubeError) {
+        console.warn("Canais YouTube indisponíveis até a migration ser aplicada:", youtubeError);
+        if (sequence === accountLoadSequenceRef.current) setYouTubeAccounts([]);
       }
     } catch (err: any) {
       toast.error(`Erro ao carregar contas do Criafy: ${err.message}`);
@@ -457,6 +469,14 @@ export default function CriafyHub() {
     toast.success("Conta TikTok conectada à Criafy.");
     const next = new URLSearchParams(searchParams);
     next.delete("tiktok");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (searchParams.get("youtube") !== "connected") return;
+    toast.success("Canal YouTube conectado à Criafy.");
+    const next = new URLSearchParams(searchParams);
+    next.delete("youtube");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -559,8 +579,8 @@ export default function CriafyHub() {
           id: "contas" as CriafyTabId,
           label: "Contas Conectadas",
           icon: Instagram,
-          badge: accounts.length + tikTokAccounts.length > 0
-            ? String(accounts.length + tikTokAccounts.length) : undefined,
+          badge: accounts.length + tikTokAccounts.length + youTubeAccounts.length > 0
+            ? String(accounts.length + tikTokAccounts.length + youTubeAccounts.length) : undefined,
           description:
             "Gerencie as contas sociais conectadas a este workspace.",
         },
@@ -904,7 +924,7 @@ export default function CriafyHub() {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Contas Conectadas na Empresa ({accounts.length + tikTokAccounts.length})
+                  Contas Conectadas na Empresa ({accounts.length + tikTokAccounts.length + youTubeAccounts.length})
                 </h2>
 
                 <div className="flex items-center gap-2">
@@ -966,6 +986,25 @@ export default function CriafyHub() {
                     <Button size="sm" variant="outline" disabled={account.connection_status !== "CONNECTED"} onClick={() => setPostingTikTokAccount(account)}>
                       Publicar vídeo
                     </Button>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {youTubeAccounts.filter((account) =>
+                !searchAccountQuery.trim() || account.display_name.toLowerCase()
+                  .includes(searchAccountQuery.toLowerCase())
+              ).map((account) => (
+                <Card key={account.id} className="border-border/70">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-white">
+                      <Youtube className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{account.display_name}</p>
+                      <p className="text-xs text-muted-foreground">YouTube · {account.connection_status === "CONNECTED" ? "Conectado" : account.connection_status}</p>
+                    </div>
+                    <Button size="sm" variant="outline" disabled={account.connection_status !== "CONNECTED"}
+                      onClick={() => setPostingYouTubeAccount(account)}>Publicar Short</Button>
                   </CardContent>
                 </Card>
               ))}
@@ -1118,6 +1157,12 @@ export default function CriafyHub() {
         onOpenChange={(open) => { if (!open) setPostingTikTokAccount(null); }}
         companyId={activeCompanyId}
         account={postingTikTokAccount}
+      />}
+      {activeCompanyId && <YouTubeShortModal
+        open={Boolean(postingYouTubeAccount)}
+        onOpenChange={(open) => { if (!open) setPostingYouTubeAccount(null); }}
+        companyId={activeCompanyId}
+        account={postingYouTubeAccount}
       />}
       <AddAccountModal
         open={addAccountOpen}

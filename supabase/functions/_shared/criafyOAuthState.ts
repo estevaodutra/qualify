@@ -1,6 +1,6 @@
 export const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
-export type CriafyOAuthProvider = "INSTAGRAM" | "TIKTOK";
+export type CriafyOAuthProvider = "INSTAGRAM" | "TIKTOK" | "YOUTUBE";
 
 export interface CriafyOAuthStatePayload {
   companyId: string;

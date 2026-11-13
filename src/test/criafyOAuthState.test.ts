@@ -64,4 +64,11 @@ describe("Criafy OAuth state", () => {
       verifyCriafyOAuthState(state, secret, { ...expected, provider: "TIKTOK" })
     ).rejects.toThrow("does not match");
   });
+
+  it("does not accept a TikTok authorization as a YouTube callback", async () => {
+    const state = await createCriafyOAuthState({ ...expected, provider: "TIKTOK" }, secret);
+    await expect(
+      verifyCriafyOAuthState(state, secret, { ...expected, provider: "YOUTUBE" })
+    ).rejects.toThrow("does not match");
+  });
 });

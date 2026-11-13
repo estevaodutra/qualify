@@ -62,6 +62,7 @@ export function PublicationsView({
   const [contents, setContents] = useState<CriafyContent[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<string>("agendadas");
+  const [resumingYouTubeId, setResumingYouTubeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -75,6 +76,38 @@ export function PublicationsView({
     }, 10000);
     return () => clearInterval(timer);
   }, [activeCompanyId, publications]);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    const processing = publications.filter((p) => p.publication_type === "YOUTUBE_SHORT" &&
+      p.status === "PUBLISHING" && p.youtube_video_id && p.social_account_id);
+    if (!processing.length) return;
+    const timer = setInterval(() => {
+      void Promise.allSettled(processing.map((p) => criafyService.getYouTubeShortStatus(
+        activeCompanyId, p.social_account_id!, p.id,
+      ))).then(() => loadData(true));
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeCompanyId, publications]);
+
+  const handleResumeYouTube = async (pub: CriafyPublication) => {
+    if (!activeCompanyId || !pub.social_account_id || resumingYouTubeId) return;
+    setResumingYouTubeId(pub.id);
+    try {
+      let videoId = pub.youtube_video_id;
+      while (!videoId) {
+        const step = await criafyService.advanceYouTubeShort(activeCompanyId, pub.social_account_id, pub.id);
+        if (step.publication.status === "FAILED") {
+          throw new Error(step.publication.youtube_failure_reason || "O upload do Short falhou.");
+        }
+        videoId = step.publication.youtube_video_id;
+        await loadData(true);
+      }
+      toast.success("Short enviado. O YouTube está processando o vídeo.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao continuar o envio.");
+    } finally { setResumingYouTubeId(null); }
+  };
 
   // New Publication Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -453,7 +486,7 @@ export function PublicationsView({
 
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-xs">{pub.publication_type === "TIKTOK_VIDEO" ? "TikTok · " : "@"}{pub.social_account?.display_name || pub.account?.username || "Conta"}</span>
+                    <span className="font-bold text-xs">{pub.publication_type === "TIKTOK_VIDEO" ? "TikTok · " : pub.publication_type === "YOUTUBE_SHORT" ? "YouTube · " : "@"}{pub.social_account?.display_name || pub.account?.username || "Conta"}</span>
                     <Badge variant="outline" className="text-[10px] uppercase font-semibold">
                       {pub.publication_type}
                     </Badge>
@@ -488,6 +521,11 @@ export function PublicationsView({
                   </p>
                   {pub.publication_type === "TIKTOK_VIDEO" && pub.status === "FAILED" && pub.tiktok_failure_reason &&
                     <p className="text-xs text-destructive">{pub.tiktok_failure_reason}</p>}
+                  {pub.publication_type === "YOUTUBE_SHORT" && pub.status === "FAILED" && pub.youtube_failure_reason &&
+                    <p className="text-xs text-destructive">{pub.youtube_failure_reason}</p>}
+                  {pub.publication_type === "YOUTUBE_SHORT" && pub.status === "PUBLISHING" &&
+                    <p className="text-xs text-muted-foreground">{pub.youtube_video_id ? "Processando no YouTube" :
+                      `Enviando vídeo: ${Math.round(100 * (pub.youtube_uploaded_bytes || 0) / (pub.content?.file_size_bytes || 1))}%`}</p>}
 
                   <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <Clock className="w-3 h-3 text-muted-foreground" />
@@ -499,7 +537,12 @@ export function PublicationsView({
               </div>
 
               <div className="flex items-center gap-2 self-end md:self-center">
-                {pub.status === "FAILED" && pub.publication_type !== "TIKTOK_VIDEO" && (
+                {pub.publication_type === "YOUTUBE_SHORT" && pub.status === "PUBLISHING" && !pub.youtube_video_id &&
+                  <Button variant="outline" size="sm" disabled={resumingYouTubeId === pub.id}
+                    onClick={() => void handleResumeYouTube(pub)}>
+                    {resumingYouTubeId === pub.id ? "Continuando..." : "Continuar envio"}
+                  </Button>}
+                {pub.status === "FAILED" && pub.publication_type !== "TIKTOK_VIDEO" && pub.publication_type !== "YOUTUBE_SHORT" && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -520,6 +563,10 @@ export function PublicationsView({
                     Ver no Instagram <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}
+                {pub.youtube_video_id && <a href={`https://www.youtube.com/shorts/${encodeURIComponent(pub.youtube_video_id)}`}
+                  target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium">
+                  Ver no YouTube <ExternalLink className="w-3.5 h-3.5" />
+                </a>}
               </div>
             </div>
           ))}

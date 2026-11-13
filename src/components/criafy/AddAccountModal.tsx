@@ -144,6 +144,17 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
     }
   };
 
+  const handleYouTubeConnect = async () => {
+    if (!activeCompanyId) { toast.error("Selecione um workspace antes de conectar o YouTube."); return; }
+    setLoadingConnect(true);
+    try {
+      window.location.assign(await criafyService.getYouTubeOAuthUrl(activeCompanyId));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao iniciar conexão YouTube.");
+      setLoadingConnect(false);
+    }
+  };
+
   // Conexão via Janela Pop-up (alternativa para quem deseja continuar na mesma tela)
   const handlePopupConnect = async () => {
     if (!activeCompanyId) {
@@ -336,11 +347,11 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
               </div>
             </button>
 
-            {/* YouTube (Em breve) */}
+            {/* YouTube */}
             <button
               type="button"
               onClick={() => setSelectedPlatform("youtube")}
-              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative opacity-75 hover:opacity-100 cursor-pointer ${
+              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative cursor-pointer ${
                 selectedPlatform === "youtube"
                   ? "border-red-500/60 bg-red-500/10 ring-2 ring-red-500/30"
                   : "border-border/70 bg-card"
@@ -351,7 +362,7 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
                   <Youtube className="w-4 h-4" />
                 </div>
                 <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-border bg-background text-muted-foreground font-semibold">
-                  Em breve
+                  OAuth oficial
                 </Badge>
               </div>
               <div>
@@ -507,30 +518,15 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
             </Button>
           </div>
         ) : (
-          /* YouTube ainda não integrado */
-          <div className="p-8 text-center space-y-3 rounded-2xl border border-dashed border-border/80 bg-muted/20 my-2">
-            <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center shadow-xs bg-muted text-foreground">
-              {selectedPlatform === "tiktok" ? (
-                <Music className="w-6 h-6 text-cyan-400" />
-              ) : (
-                <Youtube className="w-6 h-6 text-red-500" />
-              )}
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-bold text-sm text-foreground">
-                Integração com {selectedPlatform === "tiktok" ? "TikTok" : "YouTube"} em breve
-              </h4>
-              <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                Estamos finalizando o conector oficial. Por enquanto, selecione o Instagram para usufruir de todas as automações e inteligência da Criafy.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setSelectedPlatform("instagram")}
-              className="text-xs font-semibold gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white cursor-pointer"
-            >
-              <Instagram className="w-3.5 h-3.5" /> Conectar Instagram Agora
+          <div className="space-y-3 rounded-2xl border border-border/80 bg-card p-5">
+            <h4 className="text-sm font-bold">Conectar canal YouTube</h4>
+            <p className="text-xs text-muted-foreground">
+              Você será redirecionado ao Google para autorizar upload de vídeos e identificar seu canal.
+            </p>
+            <Button type="button" className="w-full gap-2 bg-red-600 text-white hover:bg-red-700"
+              onClick={handleYouTubeConnect} disabled={loadingConnect}>
+              {loadingConnect ? <Loader2 className="h-4 w-4 animate-spin" /> : <Youtube className="h-4 w-4" />}
+              Autorizar com Google
             </Button>
           </div>
         )}

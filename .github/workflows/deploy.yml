@@ -48,6 +48,8 @@ jobs:
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
         run: |
           set -eu
           test -n "$INSTAGRAM_APP_SECRET"
@@ -58,6 +60,9 @@ jobs:
           printf 'INSTAGRAM_APP_SECRET=%s\n' "$INSTAGRAM_APP_SECRET" > "$secret_file"
           if [ -n "$TIKTOK_CLIENT_KEY" ] && [ -n "$TIKTOK_CLIENT_SECRET" ]; then
             printf 'TIKTOK_CLIENT_KEY=%s\nTIKTOK_CLIENT_SECRET=%s\n' "$TIKTOK_CLIENT_KEY" "$TIKTOK_CLIENT_SECRET" >> "$secret_file"
+          fi
+          if [ -n "$YOUTUBE_CLIENT_ID" ] && [ -n "$YOUTUBE_CLIENT_SECRET" ]; then
+            printf 'YOUTUBE_CLIENT_ID=%s\nYOUTUBE_CLIENT_SECRET=%s\n' "$YOUTUBE_CLIENT_ID" "$YOUTUBE_CLIENT_SECRET" >> "$secret_file"
           fi
 
           sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -az -e "ssh -o StrictHostKeyChecking=no -p 22022" "$secret_file" ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/qualify-supabase/.env.criafy
