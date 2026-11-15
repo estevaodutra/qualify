@@ -64,6 +64,7 @@ import QuizFunnelsPage from "./pages/quiz/QuizFunnelsPage";
 import QuizEditorPage from "./pages/quiz/QuizEditorPage";
 import QuizPublicPage from "./pages/public/QuizPublicPage";
 import CriafyHub from "./pages/criafy/CriafyHub";
+import ConnectSupoClip from "./pages/criafy/ConnectSupoClip";
 import CriafyTikTokCallback from "./pages/criafy/CriafyTikTokCallback";
 import CriafyYouTubeCallback from "./pages/criafy/CriafyYouTubeCallback";
 import AccountStrategyPage from "./pages/criafy/AccountStrategyPage";
@@ -177,6 +178,14 @@ const App = () => {
                       element={
                         <ProtectedRoute requireCompany={false}>
                           <AwaitingAccess />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/criafy/connect-supoclip"
+                      element={
+                        <ProtectedRoute>
+                          <ConnectSupoClip />
                         </ProtectedRoute>
                       }
                     />
