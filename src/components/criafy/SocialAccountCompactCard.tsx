@@ -84,7 +84,9 @@ export function SocialAccountCompactCard({ account, onPublish, onDisconnect, dis
         <Button size="sm" className="flex-1" variant="outline" disabled={account.connection_status !== "CONNECTED"} onClick={onPublish}>
           {isYouTube ? "Publicar Short" : "Publicar vídeo"}
         </Button>
-        {onDisconnect && <Button size="sm" variant="ghost" disabled={disconnecting} onClick={onDisconnect}>Desconectar</Button>}
+        {onDisconnect && <Button size="sm" variant="ghost" disabled={disconnecting} onClick={onDisconnect}>
+          {disconnecting ? "Removendo..." : isYouTube ? "Desconectar" : "Remover conta"}
+        </Button>}
       </div>
     </CardContent>
   </Card>;

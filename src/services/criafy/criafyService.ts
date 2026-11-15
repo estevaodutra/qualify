@@ -165,6 +165,16 @@ export const criafyService = {
     return data || [];
   },
 
+  async disconnectTikTokAccount(companyId: string, accountId: string): Promise<{ revoked: boolean }> {
+    const { data, error } = await supabase.functions.invoke("criafy-tiktok-oauth", {
+      body: { action: "disconnect", companyId, accountId },
+    });
+    if (error || !data?.success) {
+      throw new Error(await functionErrorMessage(data, error, "Falha ao remover a conta TikTok."));
+    }
+    return { revoked: data.revoked === true };
+  },
+
   async getTikTokOAuthUrl(companyId: string, includeStats = false): Promise<string> {
     const { data, error } = await supabase.functions.invoke("criafy-tiktok-oauth", {
       body: { action: "get-auth-url", companyId, includeStats },

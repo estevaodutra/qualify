@@ -182,6 +182,7 @@ export default function CriafyHub() {
   const [youTubeAccounts, setYouTubeAccounts] = useState<CriafySocialAccount[]>([]);
   const [postingTikTokAccount, setPostingTikTokAccount] = useState<CriafySocialAccount | null>(null);
   const [postingYouTubeAccount, setPostingYouTubeAccount] = useState<CriafySocialAccount | null>(null);
+  const [disconnectingTikTokId, setDisconnectingTikTokId] = useState<string | null>(null);
   const [disconnectingYouTubeId, setDisconnectingYouTubeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const accountLoadSequenceRef = useRef(0);
@@ -474,6 +475,19 @@ export default function CriafyHub() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao desconectar o canal.");
     } finally { setDisconnectingYouTubeId(null); }
+  };
+
+  const disconnectTikTok = async (account: CriafySocialAccount) => {
+    if (!activeCompanyId || !window.confirm(`Remover ${account.display_name} do Criafy? O acesso TikTok, as publicações agendadas e o histórico desta conexão serão removidos. A conta e os vídeos no TikTok continuarão existindo.`)) return;
+    setDisconnectingTikTokId(account.id);
+    try {
+      const { revoked } = await criafyService.disconnectTikTokAccount(activeCompanyId, account.id);
+      if (revoked) toast.success("Conta TikTok removida do Criafy e acesso revogado.");
+      else toast.warning("Conta removida do Criafy. A autorização já estava expirada; confira os aplicativos conectados no TikTok.");
+      await loadAccounts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao remover a conta TikTok.");
+    } finally { setDisconnectingTikTokId(null); }
   };
 
   useEffect(() => {
@@ -991,6 +1005,8 @@ export default function CriafyHub() {
               ).map((account) => (
                 <SocialAccountCompactCard key={account.id} account={account}
                   onPublish={() => setPostingTikTokAccount(account)}
+                  onDisconnect={() => void disconnectTikTok(account)}
+                  disconnecting={disconnectingTikTokId === account.id}
                   onAuthorizeStats={() => { void criafyService.getTikTokOAuthUrl(account.company_id, true)
                     .then((url) => { window.location.href = url; })
                     .catch((error) => toast.error(error.message)); }} />

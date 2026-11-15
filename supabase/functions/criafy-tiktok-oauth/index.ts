@@ -50,6 +50,49 @@ Deno.serve(async (request) => {
       .eq("is_active", true).maybeSingle();
     if (memberError || !member) return respond({ error: "Sem acesso ao workspace." }, 403);
 
+    if (action === "disconnect") {
+      if (!accountId) return respond({ error: "Conta ausente." }, 400);
+      const { data: account } = await admin.from("criafy_social_accounts")
+        .select("id").eq("id", accountId).eq("company_id", companyId)
+        .eq("provider", "TIKTOK").maybeSingle();
+      if (!account) return respond({ error: "Conta TikTok não encontrada." }, 404);
+
+      const { data: credential, error: credentialReadError } = await admin.from("criafy_tiktok_credentials")
+        .select("refresh_expires_at").eq("company_id", companyId)
+        .eq("account_id", accountId).maybeSingle();
+      if (credentialReadError) throw new Error("Não foi possível consultar a autorização TikTok.");
+
+      let revoked = false;
+      if (credential && new Date(credential.refresh_expires_at).getTime() > Date.now()) {
+        const token = await usableTikTokToken(admin, companyId, accountId);
+        const response = await fetch("https://open.tiktokapis.com/v2/oauth/revoke/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_key: required("TIKTOK_CLIENT_KEY"),
+            client_secret: required("TIKTOK_CLIENT_SECRET"),
+            token,
+          }),
+        });
+        const revokeResult = await response.json().catch(() => null);
+        if (!response.ok || revokeResult?.error) {
+          throw new Error("TikTok não confirmou a revogação. Tente novamente ou remova o acesso nas configurações da sua conta TikTok.");
+        }
+        revoked = true;
+      }
+
+      const { error: publicationsError } = await admin.from("criafy_publications")
+        .delete().eq("company_id", companyId).eq("social_account_id", accountId);
+      if (publicationsError) throw new Error("O histórico TikTok não pôde ser excluído. Tente novamente.");
+      const { error: credentialError } = await admin.from("criafy_tiktok_credentials")
+        .delete().eq("company_id", companyId).eq("account_id", accountId);
+      if (credentialError) throw new Error("As credenciais TikTok não puderam ser excluídas. Tente novamente.");
+      const { error: accountError } = await admin.from("criafy_social_accounts")
+        .delete().eq("company_id", companyId).eq("id", accountId);
+      if (accountError) throw new Error("A conta TikTok não pôde ser removida. Tente novamente.");
+      return respond({ success: true, revoked });
+    }
+
     if (action === "stats") {
       if (!accountId) return respond({ error: "Conta ausente." }, 400);
       const { data: account } = await admin.from("criafy_social_accounts")
