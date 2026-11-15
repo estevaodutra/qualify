@@ -483,7 +483,7 @@ export default function CriafyHub() {
     try {
       const { revoked } = await criafyService.disconnectTikTokAccount(activeCompanyId, account.id);
       if (revoked) toast.success("Conta TikTok removida do Criafy e acesso revogado.");
-      else toast.warning("Conta removida do Criafy. A autorização já estava expirada; confira os aplicativos conectados no TikTok.");
+      else toast.warning("Conta removida do Criafy. O TikTok não confirmou a revogação; confira os aplicativos conectados na sua conta TikTok.");
       await loadAccounts();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao remover a conta TikTok.");

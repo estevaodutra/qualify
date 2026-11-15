@@ -64,21 +64,22 @@ Deno.serve(async (request) => {
 
       let revoked = false;
       if (credential && new Date(credential.refresh_expires_at).getTime() > Date.now()) {
-        const token = await usableTikTokToken(admin, companyId, accountId);
-        const response = await fetch("https://open.tiktokapis.com/v2/oauth/revoke/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_key: required("TIKTOK_CLIENT_KEY"),
-            client_secret: required("TIKTOK_CLIENT_SECRET"),
-            token,
-          }),
-        });
-        const revokeResult = await response.json().catch(() => null);
-        if (!response.ok || revokeResult?.error) {
-          throw new Error("TikTok não confirmou a revogação. Tente novamente ou remova o acesso nas configurações da sua conta TikTok.");
+        try {
+          const token = await usableTikTokToken(admin, companyId, accountId);
+          const response = await fetch("https://open.tiktokapis.com/v2/oauth/revoke/", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              client_key: required("TIKTOK_CLIENT_KEY"),
+              client_secret: required("TIKTOK_CLIENT_SECRET"),
+              token,
+            }),
+          });
+          const revokeResult = await response.json().catch(() => null);
+          revoked = response.ok && !revokeResult?.error;
+        } catch (error) {
+          console.warn("Não foi possível confirmar a revogação TikTok:", error instanceof Error ? error.message : error);
         }
-        revoked = true;
       }
 
       const { error: publicationsError } = await admin.from("criafy_publications")
