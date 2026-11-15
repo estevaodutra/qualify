@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install sshpass
         run: |
@@ -25,18 +27,49 @@ jobs:
 
       - name: Apply database migrations
         run: |
-          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/migrations/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/criafy-migrations/
-          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
-            set -eu
-            DB_CONTAINER=$(docker ps --format "{{.Names}}" | grep -E "^qualify-supabase-(db|postgres)$" | head -n 1)
-            test -n "$DB_CONTAINER"
-            DB_PASSWORD=$(docker exec "$DB_CONTAINER" printenv POSTGRES_PASSWORD)
-            for sql_file in $(find /tmp/criafy-migrations -maxdepth 1 -name "*.sql" | sort); do
-              echo "Applying migration: $sql_file"
-              docker exec -e PGPASSWORD="$DB_PASSWORD" -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=0 -U postgres -d postgres < "$sql_file" || true
-            done
-            rm -rf /tmp/criafy-migrations
-          '
+          set -euo pipefail
+          before='${{ github.event.before }}'
+          if [[ "$before" =~ ^0+$ ]]; then
+            echo 'Cannot determine previous commit; refusing automatic database migration.' >&2
+            exit 1
+          fi
+          git diff --name-status "$before" "${{ github.sha }}" -- supabase/migrations > /tmp/migration-changes
+          if grep -Ev '^(A[[:space:]]+supabase/migrations/[0-9]{14}_[A-Za-z0-9_]+\.sql)?$' /tmp/migration-changes; then
+            echo 'Existing migrations must not be modified or deleted.' >&2
+            exit 1
+          fi
+          cut -f2 /tmp/migration-changes | sed 's#^supabase/migrations/##' | sed '/^$/d' > /tmp/new-migrations
+          if [[ ! -s /tmp/new-migrations ]]; then
+            echo 'No new SQL migrations in this push.'
+            exit 0
+          fi
+          remote_dir="/tmp/qualify-migrations-${{ github.run_id }}-${{ github.run_attempt }}"
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz --files-from=/tmp/new-migrations -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/migrations/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$remote_dir/"
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" bash -s -- "$remote_dir" <<'REMOTE'
+          set -euo pipefail
+          migration_dir="$1"
+          [[ "$migration_dir" =~ ^/tmp/qualify-migrations-[0-9]+-[0-9]+$ ]]
+          trap 'rm -rf -- "$migration_dir"' EXIT
+          db_container=$(docker ps --format '{{.Names}}' | grep -E '^qualify-supabase-(db|postgres)$' | head -n 1)
+          test -n "$db_container"
+          db_password=$(docker exec "$db_container" printenv POSTGRES_PASSWORD)
+          export PGPASSWORD="$db_password"
+          docker exec -e PGPASSWORD "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -c 'CREATE TABLE IF NOT EXISTS public.deployment_migrations (filename text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now()); REVOKE ALL ON public.deployment_migrations FROM PUBLIC, anon, authenticated;'
+          for sql_file in "$migration_dir"/*.sql; do
+            [[ -f "$sql_file" ]] || continue
+            filename=${sql_file##*/}
+            [[ "$filename" =~ ^[0-9]{14}_[A-Za-z0-9_]+\.sql$ ]]
+            checksum=$(sha256sum "$sql_file" | cut -d' ' -f1)
+            previous=$(docker exec -e PGPASSWORD "$db_container" psql -X -At -v ON_ERROR_STOP=1 -U postgres -d postgres -c "SELECT checksum FROM public.deployment_migrations WHERE filename = '$filename'")
+            if [[ -n "$previous" ]]; then
+              [[ "$previous" == "$checksum" ]] || { echo "Migration checksum changed: $filename" >&2; exit 1; }
+              echo "Already applied: $filename"
+              continue
+            fi
+            echo "Applying migration: $filename"
+            docker exec -e PGPASSWORD -i "$db_container" psql -X -v ON_ERROR_STOP=1 -1 -U postgres -d postgres -f /dev/stdin -c "INSERT INTO public.deployment_migrations(filename, checksum) VALUES ('$filename', '$checksum')" < "$sql_file"
+          done
+          REMOTE
 
       - name: Copy functions to VPS via Rsync
         run: |
