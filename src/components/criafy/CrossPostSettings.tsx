@@ -162,6 +162,7 @@ export function CrossPostSettings({ companyId, value, onChange, isBulk = false, 
     </div>
     {value.tiktokAccountId && <div className="space-y-2 rounded-lg border p-3 text-xs">
       <p className="font-semibold">Opções do TikTok</p>
+      <p className="text-muted-foreground">Enquanto o aplicativo aguarda a auditoria do TikTok, a própria conta deve estar privada e a visibilidade do vídeo deve ser <strong>Só eu</strong>. Caso contrário, o TikTok recusará a publicação agendada.</p>
       {creatorError && <p className="text-destructive">{creatorError}</p>}
       <label className="block space-y-1">Quem pode ver
         <select className="w-full rounded-md border bg-background p-2" value={value.tiktokPrivacy}

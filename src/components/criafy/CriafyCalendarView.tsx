@@ -879,6 +879,16 @@ export function CriafyCalendarView({
                   </Badge>
                 </div>
 
+                {selectedPub.status === "FAILED" &&
+                  (selectedPub.tiktok_failure_reason || selectedPub.youtube_failure_reason) && (
+                  <div role="alert" className="rounded-lg border border-rose-500/25 bg-rose-500/10 p-3 text-xs text-rose-700 dark:text-rose-300">
+                    <p className="font-semibold">Motivo da falha</p>
+                    <p className="mt-1 whitespace-pre-wrap">{selectedPub.tiktok_failure_reason || selectedPub.youtube_failure_reason}</p>
+                    {selectedPub.publication_type === "TIKTOK_VIDEO" &&
+                      <p className="mt-2">Depois de corrigir o problema, crie uma nova publicação para este vídeo.</p>}
+                  </div>
+                )}
+
                 {selectedPub.ig_permalink && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">
@@ -946,7 +956,7 @@ export function CriafyCalendarView({
                   </div>
                 ) : attempts.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic">
-                    Nenhuma tentativa registrada para este post.
+                    Nenhuma tentativa detalhada registrada para este post.
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
