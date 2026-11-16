@@ -52,7 +52,13 @@ export default function ConnectSupoClip() {
     setSending(true);
     setError("");
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session?.access_token) {
+    let activeSession = session;
+    if (!sessionError && (!session?.access_token ||
+        (session.expires_at || 0) * 1000 < Date.now() + 30 * 60_000)) {
+      const refreshed = await supabase.auth.refreshSession();
+      activeSession = refreshed.error ? null : refreshed.data.session;
+    }
+    if (sessionError || !activeSession?.access_token) {
       setError("Sua sessão expirou. Entre novamente na Qualify.");
       setSending(false);
       return;
@@ -64,7 +70,7 @@ export default function ConnectSupoClip() {
       state,
       companyId,
       accountIds: selected,
-      accessToken: session.access_token,
+      accessToken: activeSession.access_token,
     }, SUPOCLIP_ORIGIN);
     setSending(false);
     window.close();
