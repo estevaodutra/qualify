@@ -36,7 +36,7 @@ import {
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldAlert, ShieldCheck, ShieldPlus, ShieldMinus, Settings, CircleDot,
   Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle,
   ChevronDown, CheckCircle2, ArrowUp, ArrowDown, Copy, PhoneCall,
-  Workflow
+  Workflow, FolderPlus
 } from "lucide-react";
 import {
   Dialog,
