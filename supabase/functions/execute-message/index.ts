@@ -3178,6 +3178,31 @@ Deno.serve(async (req) => {
           };
 
           try {
+            // Determinar a instância de envio (se houver pool de instâncias selecionadas, faz round-robin / random)
+            let chosenInstance = instance;
+            let chosenInstanceId = activeInstanceId;
+
+            const nodeInstanceIds = (nodeConfig.instanceIds as string[]) || [];
+            const singleInstanceId = (nodeConfig.instanceId as string);
+            const pool = nodeInstanceIds.length > 0 ? nodeInstanceIds : (singleInstanceId && singleInstanceId !== "default" ? [singleInstanceId] : []);
+
+            if (pool.length > 0) {
+              const pickedId = pool[Math.floor(Math.random() * pool.length)];
+              const { data: pickedInst } = await supabase
+                .from("instances")
+                .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+                .eq("id", pickedId)
+                .maybeSingle();
+
+              if (pickedInst && pickedInst.status === "connected") {
+                chosenInstance = pickedInst as any;
+                chosenInstanceId = pickedInst.id;
+                console.log(`[ExecuteMessage] 🎲 Instância escolhida para criar o grupo: ${pickedInst.name} (${pickedInst.phone})`);
+              } else {
+                console.warn(`[ExecuteMessage] Instância ${pickedId} não está conectada. Usando fallback padrão.`);
+              }
+            }
+
             // 2. Chamar endpoint da API de WhatsApp / Z-API para criar o grupo
             const createPayload = {
               groupName: finalGroupName,
@@ -3190,12 +3215,12 @@ Deno.serve(async (req) => {
               nodeId: node.id,
               nodeType: node.node_type,
               instance: {
-                id: activeInstanceId,
-                name: instance.name,
-                phone: instance.phone || "",
-                provider: instance.provider,
-                externalId: instance.external_instance_id || instance.id || "",
-                externalToken: instance.external_instance_token || "",
+                id: chosenInstanceId,
+                name: chosenInstance.name,
+                phone: chosenInstance.phone || "",
+                provider: chosenInstance.provider,
+                externalId: chosenInstance.external_instance_id || chosenInstance.id || "",
+                externalToken: chosenInstance.external_instance_token || "",
               },
               config: createPayload,
             });

@@ -3441,6 +3441,74 @@ export function UnifiedNodeConfigPanel({
                   </div>
                 </div>
 
+                {/* Seleção de Múltiplas Instâncias / Rotação */}
+                <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <MessageSquare className="h-3.5 w-3.5 text-indigo-600" />
+                      Instâncias para Criação do Grupo
+                    </Label>
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      {((currentConfig.instanceIds as string[]) || []).length > 0
+                        ? `${((currentConfig.instanceIds as string[]) || []).length} selecionada(s)`
+                        : "Padrão"}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Selecione uma ou mais instâncias. Se marcar mais de uma, o sistema alternará entre elas dinamicamente na criação dos grupos.
+                  </p>
+
+                  <div className="space-y-1.5 pt-1 max-h-44 overflow-y-auto pr-1">
+                    {activeInstances.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">Nenhuma instância WhatsApp encontrada.</p>
+                    ) : (
+                      activeInstances.map((inst) => {
+                        const selectedList = (currentConfig.instanceIds as string[]) || [];
+                        const isChecked = selectedList.includes(inst.id);
+
+                        return (
+                          <div
+                            key={inst.id}
+                            onClick={() => {
+                              let next: string[];
+                              if (isChecked) {
+                                next = selectedList.filter((id) => id !== inst.id);
+                              } else {
+                                next = [...selectedList, inst.id];
+                              }
+                              updateConfig("instanceIds", next);
+                              // manter instanceId atualizado para retrocompatibilidade
+                              updateConfig("instanceId", next[0] || "");
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                              isChecked
+                                ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 font-medium"
+                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={() => {}}
+                                className="pointer-events-none data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                              />
+                              <span className="truncate">{inst.name}</span>
+                              {inst.phone && (
+                                <span className="text-[10px] text-slate-400">({inst.phone})</span>
+                              )}
+                            </div>
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                inst.status === "connected" ? "bg-emerald-500" : "bg-slate-300"
+                              }`}
+                            />
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
                 {/* Nome do Grupo */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
