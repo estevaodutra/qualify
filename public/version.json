@@ -1,6 +1,6 @@
 {
-  "commit": "965f8d69663fd728dc6d46b84d30761408f80512",
-  "shortCommit": "965f8d6",
-  "message": "feat(broadcasts): cadencia anti-ban com intervalo aleatorio e disparo 1 por vez",
-  "builtAt": "2026-11-10T21:59:41.783Z"
+  "commit": "26f1a6c53d9734d1b9648b318e796651e27f76f4",
+  "shortCommit": "26f1a6c",
+  "message": "fix(criafy): explain TikTok publishing failures in calendar",
+  "builtAt": "2026-11-19T19:18:50.445Z"
 }

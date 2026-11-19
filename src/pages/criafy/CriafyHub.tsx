@@ -271,9 +271,43 @@ export default function CriafyHub() {
       loadAccounts();
     };
 
+    const handleReceivedCallback = async (data: any) => {
+      const { code, state, error } = data;
+      if (error) {
+        toast.error(`Autorização do Instagram cancelada ou recusada: ${error}`, { id: "oauth-process" });
+        return;
+      }
+      if (code && state) {
+        toast.loading("Processando autorização da Meta e validando conta...", { id: "oauth-process" });
+        try {
+          const redirectUri = `${window.location.origin}/criafy`;
+          const targetCoId = activeCompanyId || extractCompanyIdFromState(state);
+          if (!targetCoId) throw new Error("ID da empresa não identificado no retorno OAuth.");
+          const res = await criafyService.exchangeOAuthCode(targetCoId, code, redirectUri, state);
+          const count = res.count || (res.accounts ? res.accounts.length : 1);
+          toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, { id: "oauth-process" });
+          if (res.accounts && Array.isArray(res.accounts) && res.accounts.length > 0) {
+            setAccounts((prev) => {
+              const map = new Map();
+              [...res.accounts, ...prev].forEach((acc) => map.set(acc.id, acc));
+              return Array.from(map.values());
+            });
+            setValidatedAccount(res.accounts[0]);
+            setValidationModalOpen(true);
+          }
+        } catch (err: any) {
+          toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, { id: "oauth-process", duration: 10000 });
+        } finally {
+          loadAccounts();
+        }
+      }
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
         handleReceivedSuccess(event.data);
+      } else if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
+        handleReceivedCallback(event.data);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -285,6 +319,8 @@ export default function CriafyHub() {
       bc.onmessage = (event) => {
         if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
           handleReceivedSuccess(event.data);
+        } else if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
+          handleReceivedCallback(event.data);
         }
       };
     }
@@ -437,31 +473,38 @@ export default function CriafyHub() {
     if (!activeCompanyId) return;
     const sequence = ++accountLoadSequenceRef.current;
     setLoading(true);
-    setAccounts([]);
-    setTikTokAccounts([]);
-    setYouTubeAccounts([]);
     try {
-      const instagram = await criafyService.getAccounts(activeCompanyId);
+      const [igResult, ttResult, ytResult] = await Promise.allSettled([
+        criafyService.getAccounts(activeCompanyId),
+        criafyService.getTikTokAccounts(activeCompanyId),
+        criafyService.getYouTubeAccounts(activeCompanyId),
+      ]);
+
       if (sequence !== accountLoadSequenceRef.current) return;
-      setAccounts(instagram);
-      try {
-        const tiktok = await criafyService.getTikTokAccounts(activeCompanyId);
-        if (sequence === accountLoadSequenceRef.current) setTikTokAccounts(tiktok);
-      } catch (tiktokError) {
-        console.warn("Contas TikTok indisponíveis até a migration ser aplicada:", tiktokError);
-        if (sequence === accountLoadSequenceRef.current) setTikTokAccounts([]);
+
+      if (igResult.status === "fulfilled") {
+        setAccounts(igResult.value);
+      } else {
+        console.error("[CriafyHub] Erro ao carregar contas Instagram:", igResult.reason);
       }
-      try {
-        const youtube = await criafyService.getYouTubeAccounts(activeCompanyId);
-        if (sequence === accountLoadSequenceRef.current) setYouTubeAccounts(youtube);
-      } catch (youtubeError) {
-        console.warn("Canais YouTube indisponíveis até a migration ser aplicada:", youtubeError);
-        if (sequence === accountLoadSequenceRef.current) setYouTubeAccounts([]);
+
+      if (ttResult.status === "fulfilled") {
+        setTikTokAccounts(ttResult.value);
+      } else {
+        setTikTokAccounts([]);
+      }
+
+      if (ytResult.status === "fulfilled") {
+        setYouTubeAccounts(ytResult.value);
+      } else {
+        setYouTubeAccounts([]);
       }
     } catch (err: any) {
       toast.error(`Erro ao carregar contas do Criafy: ${err.message}`);
     } finally {
-      if (sequence === accountLoadSequenceRef.current) setLoading(false);
+      if (sequence === accountLoadSequenceRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1022,7 +1065,7 @@ export default function CriafyHub() {
                   disconnecting={disconnectingYouTubeId === account.id} />
               ))}
 
-              {loading ? (
+              {loading && accounts.length === 0 && tikTokAccounts.length === 0 && youTubeAccounts.length === 0 ? (
                 <div className="flex justify-center p-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
