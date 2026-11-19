@@ -3131,6 +3131,235 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ============= CREATE GROUP NODE (Nó Dedicado de Criação de Grupo) =============
+        if (node.node_type === "create_group") {
+          const nodeConfig = node.config || {};
+          const rawGroupName = (nodeConfig.groupName as string) || (nodeConfig.name as string) || "Novo Grupo";
+          const rawPhotoUrl = (nodeConfig.photoUrl as string) || (nodeConfig.url as string) || "";
+          const rawDescription = (nodeConfig.description as string) || "";
+          const rawPhones = Array.isArray(nodeConfig.phones) ? (nodeConfig.phones as string[]) : [];
+          const folderId = (nodeConfig.folderId as string) || null;
+          const companyId = typedCampaign.company_id || triggerContext?.companyId;
+
+          console.log(`[ExecuteMessage] 🏗️ Executando nó de criação de grupo: "${rawGroupName}" para company ${companyId}`);
+
+          // 1. Interpolar variáveis dinâmicas em nome, descrição, foto e participantes
+          const finalGroupName = replaceVariables(rawGroupName);
+          const finalPhotoUrl = rawPhotoUrl ? replaceVariables(rawPhotoUrl) : "";
+          const finalDescription = rawDescription ? replaceVariables(rawDescription) : "";
+          
+          const resolvedPhones: string[] = [];
+          for (const p of rawPhones) {
+            const interpolated = replaceVariables(p);
+            const digits = interpolated.replace(/\D/g, "");
+            if (digits.length >= 8) resolvedPhones.push(digits);
+          }
+
+          // Se a lista de participantes estava vazia ou queremos garantir o lead no grupo:
+          if (triggerContext?.respondentPhone) {
+            const respClean = triggerContext.respondentPhone.replace(/\D/g, "");
+            if (respClean && !resolvedPhones.includes(respClean)) {
+              resolvedPhones.push(respClean);
+            }
+          }
+
+          let createdGroupData: {
+            groupId?: string;
+            groupJid?: string;
+            groupName?: string;
+            inviteLink?: string;
+            photoUrl?: string;
+            success: boolean;
+            error?: string;
+          } = {
+            groupName: finalGroupName,
+            photoUrl: finalPhotoUrl,
+            success: false,
+          };
+
+          try {
+            // 2. Chamar endpoint da API de WhatsApp / Z-API para criar o grupo
+            const createPayload = {
+              groupName: finalGroupName,
+              phones: resolvedPhones,
+            };
+
+            const zapiResult = await sendWhatsAppMessage({
+              action: "group.create",
+              target: "",
+              nodeId: node.id,
+              nodeType: node.node_type,
+              instance: {
+                id: activeInstanceId,
+                name: instance.name,
+                phone: instance.phone || "",
+                provider: instance.provider,
+                externalId: instance.external_instance_id || instance.id || "",
+                externalToken: instance.external_instance_token || "",
+              },
+              config: createPayload,
+            });
+
+            console.log("[ExecuteMessage] Resposta group.create:", JSON.stringify(zapiResult));
+
+            if (!zapiResult.ok) {
+              throw new Error(zapiResult.error || "Falha ao criar o grupo na API de WhatsApp");
+            }
+
+            // Extrair o JID / ID do grupo retornado pela API
+            const groupResp = zapiResult.response || {};
+            const createdJid = (
+              groupResp.phone ||
+              groupResp.groupId ||
+              groupResp.groupJid ||
+              groupResp.id ||
+              groupResp.jid ||
+              ""
+            ).toString();
+
+            const normalizedJid = createdJid.includes("@") ? createdJid : `${createdJid}@g.us`;
+            createdGroupData.groupJid = normalizedJid;
+            createdGroupData.groupId = normalizedJid.replace("@g.us", "");
+
+            // 3. Obter o link de convite do grupo se disponível
+            let inviteLink = groupResp.invitationLink || groupResp.inviteUrl || groupResp.link || "";
+            if (!inviteLink && normalizedJid && activeInstanceId) {
+              try {
+                const inviteResult = await sendWhatsAppMessage({
+                  action: "group.get_invite_link",
+                  target: normalizedJid,
+                  nodeId: node.id,
+                  nodeType: node.node_type,
+                  instance: {
+                    id: activeInstanceId,
+                    name: instance.name,
+                    phone: instance.phone || "",
+                    provider: instance.provider,
+                    externalId: instance.external_instance_id || instance.id || "",
+                    externalToken: instance.external_instance_token || "",
+                  },
+                  config: { groupJid: normalizedJid },
+                });
+                inviteLink = inviteResult.response?.invitationLink || inviteResult.response?.link || "";
+              } catch (linkErr) {
+                console.warn("[ExecuteMessage] Não foi possível obter invite_link imediatamente:", linkErr);
+              }
+            }
+            createdGroupData.inviteLink = inviteLink;
+
+            // 4. Atualizar foto do grupo se fornecida
+            if (finalPhotoUrl && normalizedJid) {
+              try {
+                await sendWhatsAppMessage({
+                  action: "group.update_photo",
+                  target: normalizedJid,
+                  nodeId: node.id,
+                  nodeType: node.node_type,
+                  instance: {
+                    id: activeInstanceId,
+                    name: instance.name,
+                    phone: instance.phone || "",
+                    provider: instance.provider,
+                    externalId: instance.external_instance_id || instance.id || "",
+                    externalToken: instance.external_instance_token || "",
+                  },
+                  config: { url: finalPhotoUrl, groupJid: normalizedJid },
+                });
+              } catch (photoErr) {
+                console.warn("[ExecuteMessage] Falha não impeditiva ao atualizar foto do grupo:", photoErr);
+              }
+            }
+
+            // 5. Atualizar descrição do grupo se fornecida
+            if (finalDescription && normalizedJid) {
+              try {
+                await sendWhatsAppMessage({
+                  action: "group.update_description",
+                  target: normalizedJid,
+                  nodeId: node.id,
+                  nodeType: node.node_type,
+                  instance: {
+                    id: activeInstanceId,
+                    name: instance.name,
+                    phone: instance.phone || "",
+                    provider: instance.provider,
+                    externalId: instance.external_instance_id || instance.id || "",
+                    externalToken: instance.external_instance_token || "",
+                  },
+                  config: { description: finalDescription, groupJid: normalizedJid },
+                });
+              } catch (descErr) {
+                console.warn("[ExecuteMessage] Falha não impeditiva ao atualizar descrição do grupo:", descErr);
+              }
+            }
+
+            // 6. Cadastrar o grupo na tabela do sistema (campaign_groups ou group_campaigns)
+            try {
+              if (companyId) {
+                await supabase.from("campaign_groups").upsert({
+                  campaign_id: typedCampaign.id || effectiveSequenceId,
+                  user_id: userId || typedCampaign.user_id,
+                  group_jid: normalizedJid,
+                  group_name: finalGroupName,
+                  instance_id: activeInstanceId,
+                }, { onConflict: "campaign_id,group_jid" });
+              }
+            } catch (cgErr) {
+              console.warn("[ExecuteMessage] Falha não impeditiva ao cadastrar em campaign_groups:", cgErr);
+            }
+
+            // 7. Se foi selecionada uma pasta, associar à pasta em group_folder_assignments
+            if (folderId && companyId && normalizedJid) {
+              try {
+                await (supabase as any).from("group_folder_assignments").upsert({
+                  company_id: companyId,
+                  group_id: normalizedJid,
+                  folder_id: folderId,
+                  created_at: new Date().toISOString(),
+                }, { onConflict: "company_id,group_id" });
+                console.log(`[ExecuteMessage] 📁 Grupo ${normalizedJid} associado à pasta ${folderId}`);
+              } catch (folderErr) {
+                console.warn("[ExecuteMessage] Falha não impeditiva ao associar pasta do grupo:", folderErr);
+              }
+            }
+
+            createdGroupData.success = true;
+
+            // 8. Injetar as variáveis do grupo no contexto da execução para que nós seguintes e webhook response usem
+            if (triggerContext) {
+              (triggerContext as any).createdGroup = {
+                id: createdGroupData.groupId,
+                jid: createdGroupData.groupJid,
+                name: finalGroupName,
+                photoUrl: finalPhotoUrl,
+                inviteLink: inviteLink,
+              };
+              (triggerContext as any).group = (triggerContext as any).createdGroup;
+            }
+
+          } catch (err: any) {
+            console.error("[ExecuteMessage] ❌ Erro ao criar grupo:", err);
+            createdGroupData.error = err?.message || String(err);
+          }
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: createdGroupData.success ? "success" : "failed",
+            startedAt: nodeStartedAt,
+            input: { groupName: finalGroupName, photoUrl: finalPhotoUrl, phones: resolvedPhones, folderId },
+            output: createdGroupData,
+          });
+
+          // Segue para a próxima conexão configurada
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
         // ============= NOTIFICATION NODE (Nó de Notificações) =============
         if (node.node_type === "notification") {
           const nodeConfig = node.config || {};

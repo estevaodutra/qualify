@@ -72,6 +72,7 @@ import { ActionEditors } from "./actions/ActionEditors";
 import { useWorkflowDefinitions, isActionTriggerWorkflow } from "@/hooks/useWorkflowDefinitions";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
+import { useGroupFolders } from "@/hooks/useGroupFolders";
 
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -542,6 +543,7 @@ export function UnifiedNodeConfigPanel({
   const { campaigns = [] } = useCallCampaigns();
   const { departments = [] } = useDepartments();
   const { members: companyMembers = [] } = useCompanyMembers();
+  const { folders: groupFolders = [] } = useGroupFolders();
 
   const [customFieldsMetadata, setCustomFieldsMetadata] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
@@ -3401,6 +3403,213 @@ export function UnifiedNodeConfigPanel({
                     checked={openChatOnClick}
                     onCheckedChange={(checked) => updateConfig("openChatOnClick", checked)}
                   />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* CREATE GROUP NODE (Criar Grupo) */}
+          {node.nodeType === "create_group" && (() => {
+            const groupName = (currentConfig.groupName as string) || "";
+            const photoUrl = (currentConfig.photoUrl as string) || "";
+            const description = (currentConfig.description as string) || "";
+            const phones = Array.isArray(currentConfig.phones) ? (currentConfig.phones as string[]) : [];
+            const folderId = (currentConfig.folderId as string) || "none";
+            const autoSetWebhookResponse = (currentConfig.autoSetWebhookResponse as boolean) ?? true;
+
+            const handleAddPhone = () => {
+              updateConfig("phones", [...phones, ""]);
+            };
+
+            const handleUpdatePhone = (idx: number, val: string) => {
+              const updated = [...phones];
+              updated[idx] = val;
+              updateConfig("phones", updated);
+            };
+
+            const handleRemovePhone = (idx: number) => {
+              const updated = phones.filter((_, i) => i !== idx);
+              updateConfig("phones", updated);
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-2.5">
+                  <FolderPlus className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                  <div className="text-xs text-indigo-800 leading-relaxed">
+                    Este nó é dedicado à <strong>criação de um novo grupo</strong>. Ele cria o grupo no WhatsApp com foto, descrição e participantes, cadastra-o no sistema e o organiza na pasta selecionada.
+                  </div>
+                </div>
+
+                {/* Nome do Grupo */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Nome do Grupo *
+                    </Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        updateConfig("groupName", groupName + val);
+                      }}
+                    />
+                  </div>
+                  <Input
+                    placeholder="Ex: Projeto {{lead.name}} - Onboarding"
+                    value={groupName}
+                    onChange={(e) => updateConfig("groupName", e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+
+                {/* Foto / Imagem do Grupo */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Foto do Grupo (URL ou Padrão)
+                    </Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        updateConfig("photoUrl", photoUrl + val);
+                      }}
+                    />
+                  </div>
+                  <Input
+                    placeholder="https://sua-empresa.com/logo-grupo.png"
+                    value={photoUrl}
+                    onChange={(e) => updateConfig("photoUrl", e.target.value)}
+                    className="text-xs"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Insira uma URL pública de imagem ou deixe em branco se não quiser foto de perfil.
+                  </p>
+                </div>
+
+                {/* Descrição do Grupo */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Descrição do Grupo
+                    </Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        updateConfig("description", description + val);
+                      }}
+                    />
+                  </div>
+                  <Textarea
+                    placeholder="Ex: Grupo de atendimento oficial do cliente {{lead.name}}."
+                    value={description}
+                    onChange={(e) => updateConfig("description", e.target.value)}
+                    rows={2}
+                    className="text-xs"
+                  />
+                </div>
+
+                {/* Pasta de Destino no Sistema */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Pasta no Painel de Grupos
+                  </Label>
+                  <Select
+                    value={folderId}
+                    onValueChange={(val) => updateConfig("folderId", val === "none" ? null : val)}
+                  >
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="Selecione a pasta do grupo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" className="text-xs text-slate-500">
+                        📁 Raiz (Sem pasta específica)
+                      </SelectItem>
+                      {groupFolders.map((f) => (
+                        <SelectItem key={f.id} value={f.id} className="text-xs">
+                          📁 {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Participantes Iniciais */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Participantes Iniciais
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleAddPhone}
+                      className="h-6 text-[11px] text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 gap-1 px-2"
+                    >
+                      <Plus className="h-3 w-3" /> Adicionar Número
+                    </Button>
+                  </div>
+
+                  {phones.length === 0 ? (
+                    <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
+                      <p className="text-xs text-slate-500">Nenhum participante configurado.</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Clique em "Adicionar Número" ou use {"{{lead.phone}}"}.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {phones.map((phone, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <Input
+                            placeholder="Ex: 5511999999999 ou {{lead.phone}}"
+                            value={phone}
+                            onChange={(e) => handleUpdatePhone(idx, e.target.value)}
+                            className="text-xs flex-1"
+                          />
+                          <VariablePicker
+                            isGroup={isGroup}
+                            onSelect={(val) => {
+                              handleUpdatePhone(idx, phone + val);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemovePhone(idx)}
+                            className="h-8 w-8 text-slate-400 hover:text-rose-600 shrink-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Resposta do Webhook / Saída de Dados */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-xs font-semibold text-slate-800">
+                        Disponibilizar Resposta e Dados de Saída
+                      </Label>
+                      <p className="text-[11px] text-slate-500">
+                        Gera as variáveis para responder ao webhook ou enviar aos próximos nós:
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoSetWebhookResponse}
+                      onCheckedChange={(checked) => updateConfig("autoSetWebhookResponse", checked)}
+                    />
+                  </div>
+
+                  <div className="bg-white p-2 rounded-lg border border-slate-200 text-[11px] font-mono text-slate-600 space-y-0.5">
+                    <div>• group.id (ID no sistema)</div>
+                    <div>• group.jid (JID WhatsApp: ...@g.us)</div>
+                    <div>• group.name (Nome final do grupo)</div>
+                    <div>• group.photo_url (Foto do grupo)</div>
+                    <div>• group.invite_link (Link de convite)</div>
+                  </div>
                 </div>
               </div>
             );

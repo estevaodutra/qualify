@@ -3,7 +3,7 @@ import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, MessagesSquare, PhoneCall,
-  Workflow, Bell
+  Workflow, Bell, FolderPlus, UsersRound
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -73,7 +73,8 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   },
   { blockType: "trigger_workflow", label: "Ativar outro fluxo", icon: Workflow, color: "bg-emerald-600" },
   { blockType: "notification", label: "Notificação", icon: Bell, color: "bg-amber-600" },
-  { blockType: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-indigo-600" },
+  { blockType: "create_group", label: "Criar Grupo", icon: FolderPlus, color: "bg-indigo-600" },
+  { blockType: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-slate-700" },
   { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
   { blockType: "phone_call", label: "Ligação", icon: PhoneCall, color: "bg-pink-600" },
   { blockType: "ura", label: "URA", icon: PhoneCall, color: "bg-purple-600" },
@@ -281,6 +282,14 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
         error: true
       }
     };
+    case "create_group": return {
+      groupName: "",
+      photoUrl: "",
+      description: "",
+      phones: [],
+      folderId: null,
+      autoSetWebhookResponse: true,
+    };
     case "trigger_workflow": return {
       targetWorkflowId: "",
       targetWorkflowName: "",
@@ -322,15 +331,15 @@ export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
     { id: "advanced", label: "Avançado", nodes: advanced },
   ];
 
-  if (isGroup) {
-    categories.push({
-      id: "group_management",
-      label: "Gestão de Grupo",
-      nodes: [
-        { type: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-indigo-600" }
-      ]
-    });
-  }
+  // Categoria de Grupos: "Criar Grupo" e "Gestão de Grupo"
+  categories.push({
+    id: "groups",
+    label: "Grupos do WhatsApp",
+    nodes: [
+      { type: "create_group", label: "Criar Grupo", icon: FolderPlus, color: "bg-indigo-600" },
+      { type: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-slate-700" }
+    ]
+  });
 
   return categories;
 }
