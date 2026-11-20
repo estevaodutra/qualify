@@ -3450,7 +3450,7 @@ export function UnifiedNodeConfigPanel({
                     </Label>
                     <Badge variant="outline" className="text-[10px] font-normal">
                       {((currentConfig.instanceIds as string[]) || []).length > 0
-                        ? `${((currentConfig.instanceIds as string[]) || []).length} selecionada(s)`
+                        ? `${((currentConfig.instanceIds as string[]) || []).length} de ${activeInstances.length} selecionada(s)`
                         : "Padrão"}
                     </Badge>
                   </div>
@@ -3458,39 +3458,53 @@ export function UnifiedNodeConfigPanel({
                     Selecione uma ou mais instâncias. Se marcar mais de uma, o sistema alternará entre elas dinamicamente na criação dos grupos.
                   </p>
 
-                  <div className="space-y-1.5 pt-1 max-h-44 overflow-y-auto pr-1">
+                  <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto pr-1">
                     {activeInstances.length === 0 ? (
                       <p className="text-xs text-slate-400 italic">Nenhuma instância WhatsApp encontrada.</p>
                     ) : (
                       activeInstances.map((inst) => {
-                        const selectedList = (currentConfig.instanceIds as string[]) || [];
+                        const selectedList: string[] = Array.isArray(currentConfig.instanceIds)
+                          ? (currentConfig.instanceIds as string[])
+                          : (currentConfig.instanceId ? [currentConfig.instanceId as string] : []);
                         const isChecked = selectedList.includes(inst.id);
+
+                        const toggleInstance = (e?: React.MouseEvent) => {
+                          if (e) e.stopPropagation();
+                          const next = isChecked
+                            ? selectedList.filter((id) => id !== inst.id)
+                            : [...selectedList, inst.id];
+                          
+                          updateMultipleConfigs({
+                            instanceIds: next,
+                            instanceId: next[0] || "",
+                          });
+                        };
 
                         return (
                           <div
                             key={inst.id}
-                            onClick={() => {
-                              let next: string[];
-                              if (isChecked) {
-                                next = selectedList.filter((id) => id !== inst.id);
-                              } else {
-                                next = [...selectedList, inst.id];
+                            role="button"
+                            tabIndex={0}
+                            onClick={toggleInstance}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggleInstance();
                               }
-                              updateConfig("instanceIds", next);
-                              // manter instanceId atualizado para retrocompatibilidade
-                              updateConfig("instanceId", next[0] || "");
                             }}
-                            className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer select-none transition-colors ${
                               isChecked
-                                ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 font-medium"
+                                ? "bg-indigo-50 border-indigo-400 text-indigo-950 font-medium shadow-2xs"
                                 : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                             }`}
                           >
-                            <div className="flex items-center gap-2 truncate">
-                              <Checkbox
+                            <div className="flex items-center gap-2.5 truncate">
+                              <input
+                                type="checkbox"
                                 checked={isChecked}
-                                onCheckedChange={() => {}}
-                                className="pointer-events-none data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                onChange={() => toggleInstance()}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                               />
                               <span className="truncate">{inst.name}</span>
                               {inst.phone && (
@@ -3498,6 +3512,7 @@ export function UnifiedNodeConfigPanel({
                               )}
                             </div>
                             <span
+                              title={inst.status === "connected" ? "Conectada" : "Desconectada"}
                               className={`w-2 h-2 rounded-full shrink-0 ${
                                 inst.status === "connected" ? "bg-emerald-500" : "bg-slate-300"
                               }`}
@@ -3530,27 +3545,37 @@ export function UnifiedNodeConfigPanel({
                   />
                 </div>
 
-                {/* Foto / Imagem do Grupo */}
+                {/* Foto / Imagem do Grupo (Upload ou Biblioteca ou URL) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Foto do Grupo (URL ou Padrão)
+                      Foto do Grupo
                     </Label>
                     <VariablePicker
                       isGroup={isGroup}
                       onSelect={(val) => {
-                        updateConfig("photoUrl", photoUrl + val);
+                        const current = (currentConfig.photoUrl as string) || (currentConfig.url as string) || "";
+                        updateMultipleConfigs({ photoUrl: current + val, url: current + val });
                       }}
                     />
                   </div>
-                  <Input
-                    placeholder="https://sua-empresa.com/logo-grupo.png"
-                    value={photoUrl}
-                    onChange={(e) => updateConfig("photoUrl", e.target.value)}
-                    className="text-xs"
-                  />
+                  {renderMediaUploader ? renderMediaUploader({
+                    mediaType: "image",
+                    currentUrl: (currentConfig.photoUrl as string) || (currentConfig.url as string) || "",
+                    onUpload: (url) => updateMultipleConfigs({ photoUrl: url, url }),
+                    onUrlChange: (url) => updateMultipleConfigs({ photoUrl: url, url }),
+                    placeholder: "https://sua-empresa.com/logo-grupo.png",
+                  }) : (
+                    <MediaUploader
+                      mediaType="image"
+                      currentUrl={(currentConfig.photoUrl as string) || (currentConfig.url as string) || ""}
+                      onUpload={(url) => updateMultipleConfigs({ photoUrl: url, url })}
+                      onUrlChange={(url) => updateMultipleConfigs({ photoUrl: url, url })}
+                      placeholder="https://sua-empresa.com/logo-grupo.png"
+                    />
+                  )}
                   <p className="text-[11px] text-slate-400">
-                    Insira uma URL pública de imagem ou deixe em branco se não quiser foto de perfil.
+                    Faça upload, escolha na biblioteca de mídias ou insira uma URL/variável dinâmica.
                   </p>
                 </div>
 
