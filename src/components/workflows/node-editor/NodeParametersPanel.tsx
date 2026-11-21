@@ -13,6 +13,8 @@ interface NodeParametersPanelProps {
   isSendingManual?: boolean;
   connections?: any[];
   onDeleteConnection?: (sourceNodeId: string, conditionPath: string) => void;
+  sequenceId?: string;
+  referencePayload?: any;
 }
 
 export function NodeParametersPanel({
@@ -25,6 +27,8 @@ export function NodeParametersPanel({
   isSendingManual,
   connections,
   onDeleteConnection,
+  sequenceId,
+  referencePayload,
 }: NodeParametersPanelProps) {
   return (
     <div className="flex flex-col border rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -46,6 +50,8 @@ export function NodeParametersPanel({
           onDeleteConnection={onDeleteConnection}
           onManualSend={onManualSend}
           isSendingManual={isSendingManual}
+          sequenceId={sequenceId}
+          referencePayload={referencePayload}
           renderMediaUploader={(props) => (
             <MediaUploader
               mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}

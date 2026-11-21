@@ -90,7 +90,7 @@ export function NodeEditorModal({
   const [latestPayload, setLatestPayload] = useState<any>(null);
 
   useEffect(() => {
-    if (isOpen && node?.nodeType === "field_op" && sequenceId) {
+    if (isOpen && sequenceId) {
       const fetchLatestPayload = async () => {
         try {
           const { data, error } = await supabase
@@ -113,7 +113,7 @@ export function NodeEditorModal({
       };
       fetchLatestPayload();
     }
-  }, [isOpen, node?.nodeType, sequenceId]);
+  }, [isOpen, sequenceId]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({});
   const [lastLoadedNodeId, setLastLoadedNodeId] = useState<string | null>(null);
@@ -757,17 +757,30 @@ export function NodeEditorModal({
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-50/30">
-              <NodeParametersPanel
-                node={{ ...node, config: localConfig }}
-                onUpdate={handleUpdateConfig}
-                mode={mode}
-                isGroup={isGroup}
-                nodes={nodes}
-                connections={connections}
-                onDeleteConnection={onDeleteConnection}
-                onManualSend={handleManualSend}
-                isSendingManual={isSendingManual}
-              />
+              {(() => {
+                const triggerNode = nodes?.find(n => n.nodeType === "trigger" || n.nodeType === "webhook");
+                const webhookTrigger = (triggerNode?.config?.triggers as any[])?.find(t => t.type === "webhook") || (triggerNode?.config?.triggers as any[])?.[0];
+                const triggerConfig = webhookTrigger?.config || (triggerNode?.config?.triggerConfig as Record<string, any> | undefined);
+                const activeRef = triggerConfig?.referencePayload || (triggerNode?.config as any)?.referencePayload;
+                const referencePayload = activeRef ? toCanonicalPayload(activeRef) : null;
+                const finalPayload = latestPayload || referencePayload;
+
+                return (
+                  <NodeParametersPanel
+                    node={{ ...node, config: localConfig }}
+                    onUpdate={handleUpdateConfig}
+                    mode={mode}
+                    isGroup={isGroup}
+                    nodes={nodes}
+                    connections={connections}
+                    onDeleteConnection={onDeleteConnection}
+                    onManualSend={handleManualSend}
+                    isSendingManual={isSendingManual}
+                    sequenceId={sequenceId}
+                    referencePayload={finalPayload}
+                  />
+                );
+              })()}
             </div>
           )}
         </SheetContent>

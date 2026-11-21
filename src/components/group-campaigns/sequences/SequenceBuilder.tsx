@@ -249,6 +249,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
             onManualSend={onManualSend}
             isSendingManual={isSendingManual}
             nodes={nodes}
+            sequenceId={sequence.id}
             renderMediaUploader={(props) => (
               <MediaUploader
                 mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}

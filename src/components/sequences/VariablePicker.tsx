@@ -19,6 +19,7 @@ interface VariablePickerProps {
   isGroup?: boolean;
   referencePayload?: any;
   triggerName?: string;
+  sequenceId?: string;
 }
 
 // Componente recursivo para listar e selecionar propriedades do JSON (estilo Data Trace)
@@ -160,7 +161,7 @@ function JsonExplorerList({
   );
 }
 
-export function VariablePicker({ onSelect, isGroup, referencePayload, triggerName = "Webhook 1" }: VariablePickerProps) {
+export function VariablePicker({ onSelect, isGroup, referencePayload, triggerName = "Webhook 1", sequenceId }: VariablePickerProps) {
   const { activeCompany } = useCompany();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -215,23 +216,34 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
     }
   }, [open]);
 
-  // Busca payload real do banco caso não tenha sido passado como prop
+  // Busca payload real do banco caso não tenha sido passado como prop (estritamente filtrado por este fluxo)
   const fetchRealPayload = async () => {
     if (referencePayload && typeof referencePayload === "object" && Object.keys(referencePayload).length > 0) {
       setFetchedPayload(toCanonicalPayload(referencePayload));
       return;
     }
 
+    if (!sequenceId) {
+      setFetchedPayload(null);
+      return;
+    }
+
     setIsLoadingPayload(true);
     try {
-      // 1. Tenta última execução de workflow
-      const { data: wfData } = await supabase
+      // 1. Tenta última execução deste workflow específico
+      let wfQuery = supabase
         .from("workflow_executions")
         .select("trigger_payload")
+        .eq("sequence_id", sequenceId)
         .not("trigger_payload", "is", null)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (activeCompany?.id) {
+        wfQuery = wfQuery.eq("company_id", activeCompany.id);
+      }
+
+      const { data: wfData } = await wfQuery.maybeSingle();
 
       if (wfData?.trigger_payload && typeof wfData.trigger_payload === "object" && Object.keys(wfData.trigger_payload).length > 0) {
         setFetchedPayload(toCanonicalPayload(wfData.trigger_payload));
@@ -239,32 +251,23 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
         return;
       }
 
-      // 2. Tenta última execução de sequência
-      const { data: seqData } = await supabase
+      // 2. Tenta última execução de sequência deste fluxo específico
+      let seqQuery = supabase
         .from("sequence_executions")
         .select("trigger_context")
+        .eq("sequence_id", sequenceId)
         .not("trigger_context", "is", null)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (activeCompany?.id) {
+        seqQuery = seqQuery.eq("company_id", activeCompany.id);
+      }
+
+      const { data: seqData } = await seqQuery.maybeSingle();
 
       if (seqData?.trigger_context && typeof seqData.trigger_context === "object" && Object.keys(seqData.trigger_context).length > 0) {
         setFetchedPayload(toCanonicalPayload(seqData.trigger_context));
-        setIsLoadingPayload(false);
-        return;
-      }
-
-      // 3. Tenta último evento de webhook gravado
-      const { data: hookData } = await supabase
-        .from("webhook_events")
-        .select("raw_event")
-        .not("raw_event", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (hookData?.raw_event && typeof hookData.raw_event === "object" && Object.keys(hookData.raw_event).length > 0) {
-        setFetchedPayload(toCanonicalPayload(hookData.raw_event));
         setIsLoadingPayload(false);
         return;
       }
@@ -282,7 +285,7 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
     if (open || payloadModalOpen) {
       fetchRealPayload();
     }
-  }, [open, payloadModalOpen, referencePayload]);
+  }, [open, payloadModalOpen, referencePayload, sequenceId]);
 
   const currentPayload = useMemo(() => {
     if (referencePayload && typeof referencePayload === "object" && Object.keys(referencePayload).length > 0) {
@@ -747,9 +750,14 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
                       selectedPath={tempValue}
                     />
                   ) : (
-                    <div className="p-8 text-center text-xs text-slate-400 space-y-1">
-                      <p className="font-semibold text-slate-500">Nenhum dado recebido ainda.</p>
-                      <p className="text-[11px] text-slate-400">Envie uma requisição para o webhook para visualizar as variáveis reais aqui.</p>
+                    <div className="p-8 text-center text-xs text-slate-400 space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                        <Braces className="h-5 w-5" />
+                      </div>
+                      <p className="font-semibold text-slate-700">Nenhum dado recebido ainda neste fluxo.</p>
+                      <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                        Envie uma requisição para o Webhook deste fluxo para capturar e mapear as variáveis reais aqui.
+                      </p>
                     </div>
                   )}
                 </div>

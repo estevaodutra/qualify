@@ -393,6 +393,7 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
           onManualSend={handleManualSendNode}
           isSendingManual={isSendingManual}
           nodes={localNodes}
+          sequenceId={sequence.id}
           renderMediaUploader={(props) => (
             <MediaUploader
               mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}

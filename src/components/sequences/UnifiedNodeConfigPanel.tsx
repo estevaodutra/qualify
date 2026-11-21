@@ -56,7 +56,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getNodeBlockDefinition, getDefaultConfigForSubType, isActionSubType } from "./nodeDefinitions";
-import { VariablePicker } from "./VariablePicker";
+import { VariablePicker as BaseVariablePicker } from "./VariablePicker";
 import { normalizeDelayConfig, toDelayMs, formatDelayLabel, fromDelayMs, DelayUnit } from "@/lib/workflows/delay";
 import { MediaUploader } from "@/components/group-campaigns/sequences/MediaUploader";
 import { WorkflowAudioPlayer } from "./WorkflowAudioPlayer";
@@ -161,6 +161,8 @@ interface UnifiedNodeConfigPanelProps {
   getActionIconColor?: (actionType?: string) => string;
   onDeleteConnection?: (sourceNodeId: string, conditionPath: string) => void;
   connections?: LocalConnection[];
+  sequenceId?: string;
+  referencePayload?: any;
 }
 
 const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = {
@@ -510,6 +512,8 @@ export function UnifiedNodeConfigPanel({
   nodes,
   onDeleteConnection,
   connections,
+  sequenceId,
+  referencePayload: referencePayloadProp,
 }: UnifiedNodeConfigPanelProps) {
   const { toast } = useToast();
   const [optionToDelete, setOptionToDelete] = useState<{ index: number; id: string; label: string } | null>(null);
@@ -638,10 +642,21 @@ export function UnifiedNodeConfigPanel({
   const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
 
   const triggerNode = nodes?.find(n => n.nodeType === "trigger" || n.nodeType === "webhook");
-  const referencePayload = (triggerNode?.config?.triggerConfig as any)?.referencePayload 
+  const extractedReferencePayload = (triggerNode?.config?.triggerConfig as any)?.referencePayload 
     || (triggerNode?.config?.triggers as any[])?.find((t: any) => t?.config?.referencePayload)?.config?.referencePayload
+    || (triggerNode?.config as any)?.referencePayload
     || (node.config?.referencePayload);
+  const referencePayload = referencePayloadProp || extractedReferencePayload;
   const triggerName = triggerNode?.config?.triggerType === "webhook" ? "Webhook 1" : "Webhook 1";
+
+  const VariablePicker = (props: React.ComponentProps<typeof BaseVariablePicker>) => (
+    <BaseVariablePicker
+      referencePayload={referencePayload}
+      sequenceId={sequenceId}
+      triggerName={triggerName}
+      {...props}
+    />
+  );
 
   if (resolvedNodeType === "ura") {
     const mosConfig = {

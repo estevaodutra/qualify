@@ -196,6 +196,7 @@ Deno.serve(async (req) => {
     }
     let triggerConfig = (typedSequence.trigger_config as Record<string, unknown>) || {};
     const effectiveTriggerId = (triggerIdFromUrl || payload.triggerId || payload.trigger_id) as string | undefined;
+    let resolvedTriggerId: string | undefined = effectiveTriggerId;
 
     try {
       const { data: trigNode } = await supabase
@@ -214,7 +215,11 @@ Deno.serve(async (req) => {
           ? triggers.find((t: any) => t.id === effectiveTriggerId)
           : (isChainedFromWorkflow 
               ? (triggers.find((t: any) => t.type === "action") || (triggers.length > 0 ? triggers[0] : null))
-              : (triggers.length > 0 ? triggers[0] : null));
+              : (triggers.find((t: any) => t.type === "webhook" || t.type === "api") || (triggers.length > 0 ? triggers[0] : null)));
+
+        if (matchedTrig?.id) {
+          resolvedTriggerId = matchedTrig.id;
+        }
 
         triggerConfig = {
           ...nodeTriggerConfig,
@@ -737,7 +742,7 @@ Deno.serve(async (req) => {
         webhookPayload,
         leadId: resolvedLeadId,
         companyId: resolvedCompanyId,
-        triggerId: triggerIdFromUrl || payload.triggerId || payload.trigger_id,
+        triggerId: resolvedTriggerId || triggerIdFromUrl || payload.triggerId || payload.trigger_id,
       };
 
       const executePayload = {

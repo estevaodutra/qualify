@@ -1,6 +1,6 @@
 {
-  "commit": "26f1a6c53d9734d1b9648b318e796651e27f76f4",
-  "shortCommit": "26f1a6c",
-  "message": "fix(criafy): explain TikTok publishing failures in calendar",
-  "builtAt": "2026-11-19T19:18:50.445Z"
+  "commit": "17085d92ffe25a8ff2d2318d6ffc09d10addc469",
+  "shortCommit": "17085d9",
+  "message": "feat(create_group): add media uploader / library selector for group photo and fix multi-instance checkbox selection",
+  "builtAt": "2026-11-21T23:39:39.517Z"
 }

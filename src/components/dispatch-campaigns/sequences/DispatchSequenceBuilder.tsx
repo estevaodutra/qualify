@@ -216,6 +216,7 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
             onManualSend={onManualSend}
             isSendingManual={isSendingManual}
             nodes={nodes}
+            sequenceId={sequence.id}
             renderMediaUploader={(props) => (
               <MediaUploader
                 mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}
