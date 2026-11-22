@@ -11,7 +11,7 @@ export async function logNodeExecution(
     userId: string;
     nodeId: string;
     nodeType: string;
-    status: "success" | "error" | "running" | "not_executed";
+    status: "success" | "error" | "running" | "not_executed" | string;
     startedAt: Date;
     input?: unknown;
     output?: unknown;
@@ -20,12 +20,17 @@ export async function logNodeExecution(
 ): Promise<void> {
   try {
     const finishedAt = new Date();
+    const rawStatus = String(params.status || "not_executed");
+    const normalizedStatus = (rawStatus === "failed" || rawStatus === "fail") 
+      ? "error" 
+      : (["success", "error", "running", "not_executed"].includes(rawStatus) ? rawStatus : "error");
+
     await supabase.from("workflow_node_executions").insert({
       execution_id: params.executionId,
       user_id: params.userId,
       node_id: params.nodeId,
       node_type: params.nodeType,
-      status: params.status,
+      status: normalizedStatus,
       input: params.input ?? null,
       output: params.output ?? null,
       error: params.error ?? null,

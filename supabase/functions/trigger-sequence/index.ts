@@ -801,6 +801,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    const firstCreatedGroup = results.find(r => r.executeResult?.createdGroup)?.executeResult?.createdGroup
+      || results[0]?.executeResult?.createdGroup;
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -810,6 +813,14 @@ Deno.serve(async (req) => {
         campaignId: typedCampaign.id,
         campaignName: typedCampaign.name,
         customFieldsApplied: Object.keys(customFields),
+        ...(firstCreatedGroup ? {
+          group: firstCreatedGroup,
+          groupId: firstCreatedGroup.id,
+          groupJid: firstCreatedGroup.jid,
+          groupName: firstCreatedGroup.name,
+          groupPhoto: firstCreatedGroup.photoUrl,
+          groupInviteLink: firstCreatedGroup.inviteLink,
+        } : {}),
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -53,8 +53,20 @@ function getZApiHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise<ZApiResponse> {
-  const { action, node, instance, destination } = payload;
+export async function sendWhatsAppMessage(payload: StandardizedPayload | any): Promise<ZApiResponse> {
+  const action = payload.action;
+  const instance = payload.instance || {};
+  const destination = payload.destination || {
+    phone: payload.target || payload.phone || "",
+    jid: payload.target || payload.jid || "",
+    name: payload.name || "",
+  };
+  const node = payload.node || {
+    id: payload.nodeId || "",
+    type: payload.nodeType || "",
+    order: 0,
+    config: payload.config || {},
+  };
   const { provider, externalId, externalToken } = instance;
   
   // Normalizar JID/Phone: para grupos reais, usar o JID com @g.us.
@@ -71,8 +83,8 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
   };
 
   let target = "";
-  const jid = destination.jid || "";
-  const phone = destination.phone || "";
+  const jid = destination?.jid || "";
+  const phone = destination?.phone || "";
   const isGroup = isActualGroup(jid) || isActualGroup(phone);
 
   if (isGroup) {
@@ -96,7 +108,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     chatId: target,
   };
 
-  const config = node.config || {};
+  const config = node?.config || payload.config || {};
 
   // Mention handling:
   const mentionAll = Boolean(config.mention_all ?? config.mentionAll ?? false);
@@ -280,18 +292,29 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       };
       break;
 
+    case "group.get_invite_link":
+      endpoint = `/group-invitation-link/${encodeURIComponent(target || config.groupJid || config.groupId || "")}`;
+      body = {
+        phone: target || config.groupJid || config.groupId || "",
+        groupId: target || config.groupJid || config.groupId || "",
+      };
+      break;
+
     case "group.update_name":
       endpoint = "/update-group-name";
+      body.phone = target || config.groupJid || "";
       body.groupName = config.newName || config.name || config.groupName || "";
       break;
 
     case "group.update_photo":
       endpoint = "/update-group-photo";
-      body.image = config.url || config.photoUrl || "";
+      body.phone = target || config.groupJid || "";
+      body.image = config.url || config.photoUrl || config.image || "";
       break;
 
     case "group.update_description":
       endpoint = "/update-group-description";
+      body.phone = target || config.groupJid || "";
       body.description = config.description || "";
       break;
 

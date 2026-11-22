@@ -3118,7 +3118,7 @@ Deno.serve(async (req) => {
 
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
-            status: triggeredResults.some(r => r.success) ? "success" : "failed",
+            status: triggeredResults.some(r => r.success) ? "success" : "error",
             startedAt: nodeStartedAt,
             input: { targetWorkflowId, targetWorkflowName },
             output: { results: triggeredResults },
@@ -3211,16 +3211,24 @@ Deno.serve(async (req) => {
 
             const zapiResult = await sendWhatsAppMessage({
               action: "group.create",
-              target: "",
-              nodeId: node.id,
-              nodeType: node.node_type,
+              node: {
+                id: node.id,
+                type: node.node_type,
+                order: 0,
+                config: createPayload,
+              },
               instance: {
                 id: chosenInstanceId,
-                name: chosenInstance.name,
-                phone: chosenInstance.phone || "",
-                provider: chosenInstance.provider,
-                externalId: chosenInstance.external_instance_id || chosenInstance.id || "",
-                externalToken: chosenInstance.external_instance_token || "",
+                name: chosenInstance?.name || "",
+                phone: chosenInstance?.phone || "",
+                provider: chosenInstance?.provider || "waha",
+                externalId: chosenInstance?.external_instance_id || chosenInstance?.id || "",
+                externalToken: chosenInstance?.external_instance_token || "",
+              },
+              destination: {
+                phone: "",
+                jid: "",
+                name: "",
               },
               config: createPayload,
             });
@@ -3228,44 +3236,61 @@ Deno.serve(async (req) => {
             console.log("[ExecuteMessage] Resposta group.create:", JSON.stringify(zapiResult));
 
             if (!zapiResult.ok) {
-              throw new Error(zapiResult.error || "Falha ao criar o grupo na API de WhatsApp");
+              const errMsg = zapiResult.details?.error 
+                || zapiResult.details?.message 
+                || (typeof zapiResult.details === "string" ? zapiResult.details : null)
+                || "Falha ao criar o grupo na API de WhatsApp";
+              throw new Error(errMsg);
             }
 
             // Extrair o JID / ID do grupo retornado pela API
-            const groupResp = zapiResult.response || {};
+            const groupResp = zapiResult.details || (zapiResult as any).response || {};
             const createdJid = (
               groupResp.phone ||
               groupResp.groupId ||
               groupResp.groupJid ||
               groupResp.id ||
               groupResp.jid ||
+              groupResp.gid ||
+              (groupResp.data && (groupResp.data.phone || groupResp.data.id || groupResp.data.jid || groupResp.data.groupJid)) ||
               ""
             ).toString();
 
-            const normalizedJid = createdJid.includes("@") ? createdJid : `${createdJid}@g.us`;
+            const cleanDigits = createdJid.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+            const normalizedJid = cleanDigits ? `${cleanDigits}@g.us` : (createdJid.includes("@") ? createdJid : (createdJid ? `${createdJid}@g.us` : ""));
             createdGroupData.groupJid = normalizedJid;
-            createdGroupData.groupId = normalizedJid.replace("@g.us", "");
+            createdGroupData.groupId = cleanDigits || (normalizedJid ? normalizedJid.replace("@g.us", "") : "");
 
             // 3. Obter o link de convite do grupo se disponível
             let inviteLink = groupResp.invitationLink || groupResp.inviteUrl || groupResp.link || "";
-            if (!inviteLink && normalizedJid && activeInstanceId) {
+            if (!inviteLink && normalizedJid && chosenInstanceId) {
               try {
                 const inviteResult = await sendWhatsAppMessage({
                   action: "group.get_invite_link",
                   target: normalizedJid,
-                  nodeId: node.id,
-                  nodeType: node.node_type,
-                  instance: {
-                    id: activeInstanceId,
-                    name: instance.name,
-                    phone: instance.phone || "",
-                    provider: instance.provider,
-                    externalId: instance.external_instance_id || instance.id || "",
-                    externalToken: instance.external_instance_token || "",
+                  node: {
+                    id: node.id,
+                    type: node.node_type,
+                    order: 0,
+                    config: { groupJid: normalizedJid, groupId: normalizedJid },
                   },
-                  config: { groupJid: normalizedJid },
+                  instance: {
+                    id: chosenInstanceId,
+                    name: chosenInstance?.name || "",
+                    phone: chosenInstance?.phone || "",
+                    provider: chosenInstance?.provider || "waha",
+                    externalId: chosenInstance?.external_instance_id || chosenInstance?.id || "",
+                    externalToken: chosenInstance?.external_instance_token || "",
+                  },
+                  destination: {
+                    jid: normalizedJid,
+                    phone: normalizedJid,
+                    name: "",
+                  },
+                  config: { groupJid: normalizedJid, groupId: normalizedJid },
                 });
-                inviteLink = inviteResult.response?.invitationLink || inviteResult.response?.link || "";
+                const inviteDetails = inviteResult.details || (inviteResult as any).response || {};
+                inviteLink = inviteDetails.invitationLink || inviteDetails.inviteUrl || inviteDetails.link || "";
               } catch (linkErr) {
                 console.warn("[ExecuteMessage] Não foi possível obter invite_link imediatamente:", linkErr);
               }
@@ -3278,15 +3303,24 @@ Deno.serve(async (req) => {
                 await sendWhatsAppMessage({
                   action: "group.update_photo",
                   target: normalizedJid,
-                  nodeId: node.id,
-                  nodeType: node.node_type,
+                  node: {
+                    id: node.id,
+                    type: node.node_type,
+                    order: 0,
+                    config: { url: finalPhotoUrl, groupJid: normalizedJid },
+                  },
                   instance: {
-                    id: activeInstanceId,
-                    name: instance.name,
-                    phone: instance.phone || "",
-                    provider: instance.provider,
-                    externalId: instance.external_instance_id || instance.id || "",
-                    externalToken: instance.external_instance_token || "",
+                    id: chosenInstanceId,
+                    name: chosenInstance?.name || "",
+                    phone: chosenInstance?.phone || "",
+                    provider: chosenInstance?.provider || "waha",
+                    externalId: chosenInstance?.external_instance_id || chosenInstance?.id || "",
+                    externalToken: chosenInstance?.external_instance_token || "",
+                  },
+                  destination: {
+                    jid: normalizedJid,
+                    phone: normalizedJid,
+                    name: "",
                   },
                   config: { url: finalPhotoUrl, groupJid: normalizedJid },
                 });
@@ -3301,15 +3335,24 @@ Deno.serve(async (req) => {
                 await sendWhatsAppMessage({
                   action: "group.update_description",
                   target: normalizedJid,
-                  nodeId: node.id,
-                  nodeType: node.node_type,
+                  node: {
+                    id: node.id,
+                    type: node.node_type,
+                    order: 0,
+                    config: { description: finalDescription, groupJid: normalizedJid },
+                  },
                   instance: {
-                    id: activeInstanceId,
-                    name: instance.name,
-                    phone: instance.phone || "",
-                    provider: instance.provider,
-                    externalId: instance.external_instance_id || instance.id || "",
-                    externalToken: instance.external_instance_token || "",
+                    id: chosenInstanceId,
+                    name: chosenInstance?.name || "",
+                    phone: chosenInstance?.phone || "",
+                    provider: chosenInstance?.provider || "waha",
+                    externalId: chosenInstance?.external_instance_id || chosenInstance?.id || "",
+                    externalToken: chosenInstance?.external_instance_token || "",
+                  },
+                  destination: {
+                    jid: normalizedJid,
+                    phone: normalizedJid,
+                    name: "",
                   },
                   config: { description: finalDescription, groupJid: normalizedJid },
                 });
@@ -3326,7 +3369,7 @@ Deno.serve(async (req) => {
                   user_id: userId || typedCampaign.user_id,
                   group_jid: normalizedJid,
                   group_name: finalGroupName,
-                  instance_id: activeInstanceId,
+                  instance_id: chosenInstanceId,
                 }, { onConflict: "campaign_id,group_jid" });
               }
             } catch (cgErr) {
@@ -3362,6 +3405,10 @@ Deno.serve(async (req) => {
               (triggerContext as any).group = (triggerContext as any).createdGroup;
             }
 
+            // Atualiza a instância ativa para este nó e seguintes
+            activeInstanceId = chosenInstanceId;
+            instance = chosenInstance;
+
           } catch (err: any) {
             console.error("[ExecuteMessage] ❌ Erro ao criar grupo:", err);
             createdGroupData.error = err?.message || String(err);
@@ -3372,7 +3419,8 @@ Deno.serve(async (req) => {
             userId,
             nodeId: node.id,
             nodeType: node.node_type,
-            status: createdGroupData.success ? "success" : "failed",
+            status: createdGroupData.success ? "success" : "error",
+            error: createdGroupData.error || null,
             startedAt: nodeStartedAt,
             input: { groupName: finalGroupName, photoUrl: finalPhotoUrl, phones: resolvedPhones, folderId },
             output: createdGroupData,
@@ -3597,7 +3645,7 @@ Deno.serve(async (req) => {
             userId,
             nodeId: node.id,
             nodeType: node.node_type,
-            status: notifyResults.some(r => r.success) ? "success" : "failed",
+            status: notifyResults.some(r => r.success) ? "success" : "error",
             startedAt: nodeStartedAt,
             input: { recipientType, targetDeptId, targetUserId, rawTitle, rawMessage },
             output: { results: notifyResults },
@@ -6776,6 +6824,7 @@ Deno.serve(async (req) => {
         nodesFailed,
         groupsProcessed: groups.length,
         totalTimeMs,
+        createdGroup: (triggerContext as any)?.createdGroup || null,
         webhookResponses,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
