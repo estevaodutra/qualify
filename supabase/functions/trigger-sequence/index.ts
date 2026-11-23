@@ -801,6 +801,24 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Se algum nó do tipo "webhook_response" foi executado, retorna a resposta configurada nele
+    const customResp = results.find(r => r.executeResult?.customResponse)?.executeResult?.customResponse;
+    if (customResp) {
+      const respStatus = Number(customResp.status || 200);
+      const respBody = customResp.body !== undefined ? customResp.body : customResp;
+      console.log(`[TriggerSequence] 📤 Devolvendo resposta configurada pelo nó webhook_response (status ${respStatus})`);
+      return new Response(
+        typeof respBody === "string" ? respBody : JSON.stringify(respBody),
+        {
+          status: respStatus,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": customResp.contentType || "application/json",
+          },
+        }
+      );
+    }
+
     const firstCreatedGroup = results.find(r => r.executeResult?.createdGroup)?.executeResult?.createdGroup
       || results[0]?.executeResult?.createdGroup;
 

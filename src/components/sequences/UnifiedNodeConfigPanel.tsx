@@ -36,7 +36,7 @@ import {
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldAlert, ShieldCheck, ShieldPlus, ShieldMinus, Settings, CircleDot,
   Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle,
   ChevronDown, CheckCircle2, ArrowUp, ArrowDown, Copy, PhoneCall,
-  Workflow, FolderPlus
+  Workflow, FolderPlus, SendHorizontal
 } from "lucide-react";
 import {
   Dialog,
@@ -3718,6 +3718,170 @@ export function UnifiedNodeConfigPanel({
                     <div>• group.photo_url (Foto do grupo)</div>
                     <div>• group.invite_link (Link de convite)</div>
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* WEBHOOK RESPONSE NODE (Responder Webhook / Origem) */}
+          {node.nodeType === "webhook_response" && (() => {
+            const responseMode = (currentConfig.responseMode as string) || "n8n_raw";
+            const statusCode = (currentConfig.statusCode as number) || 200;
+            const customJson = (currentConfig.customJson as string) || "{\n  \"success\": true,\n  \"group\": {{group}}\n}";
+
+            return (
+              <div className="space-y-4">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-2.5">
+                  <SendHorizontal className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <div className="text-xs text-emerald-900 leading-relaxed">
+                    Este nó <strong>responde à requisição que originou a execução</strong> (Webhook / Chamada de API externa). Ele finaliza a resposta HTTP devolvendo os dados processados pelo fluxo.
+                  </div>
+                </div>
+
+                {/* Modo de Resposta */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Origem dos Dados de Resposta
+                  </Label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div
+                      onClick={() => updateConfig("responseMode", "n8n_raw")}
+                      className={cn(
+                        "p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-3",
+                        responseMode === "n8n_raw"
+                          ? "border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      )}
+                    >
+                      <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-600">
+                        {responseMode === "n8n_raw" && <div className="h-2 w-2 rounded-full bg-emerald-600" />}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-semibold text-slate-800">
+                          Repassar resposta recebida do N8N (Recomendado)
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-snug">
+                          Devolve diretamente o JSON e os dados retornados pela execução do N8N / nó de criação de grupo.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      onClick={() => updateConfig("responseMode", "group_data")}
+                      className={cn(
+                        "p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-3",
+                        responseMode === "group_data"
+                          ? "border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      )}
+                    >
+                      <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-600">
+                        {responseMode === "group_data" && <div className="h-2 w-2 rounded-full bg-emerald-600" />}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-semibold text-slate-800">
+                          Dados Padronizados do Grupo
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-snug">
+                          Retorna um objeto estruturado com groupId, groupJid, groupName, groupPhoto e groupInviteLink.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      onClick={() => updateConfig("responseMode", "custom_json")}
+                      className={cn(
+                        "p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-3",
+                        responseMode === "custom_json"
+                          ? "border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      )}
+                    >
+                      <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-600">
+                        {responseMode === "custom_json" && <div className="h-2 w-2 rounded-full bg-emerald-600" />}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-semibold text-slate-800">
+                          JSON Personalizado
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-snug">
+                          Escreva um JSON customizado utilizando variáveis dinâmicas do fluxo.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Código de Status HTTP */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Status HTTP da Resposta
+                  </Label>
+                  <Select
+                    value={String(statusCode)}
+                    onValueChange={(val) => updateConfig("statusCode", Number(val))}
+                  >
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="Selecione o status HTTP..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="200" className="text-xs">200 - Sucesso (OK)</SelectItem>
+                      <SelectItem value="201" className="text-xs">201 - Criado com Sucesso (Created)</SelectItem>
+                      <SelectItem value="202" className="text-xs">202 - Aceito / Em Processamento (Accepted)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Editor de JSON se custom_json */}
+                {responseMode === "custom_json" && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Estrutura do JSON de Resposta
+                      </Label>
+                      <VariablePicker
+                        isGroup={isGroup}
+                        sequenceId={sequenceId}
+                        onSelect={(val) => updateConfig("customJson", customJson + val)}
+                      />
+                    </div>
+                    <Textarea
+                      value={customJson}
+                      onChange={(e) => updateConfig("customJson", e.target.value)}
+                      placeholder='{\n  "success": true,\n  "groupId": "{{group.id}}"\n}'
+                      rows={6}
+                      className="font-mono text-xs bg-slate-50"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Você pode usar variáveis como &#123;&#123;group.id&#125;&#125;, &#123;&#123;group.invite_link&#125;&#125;, &#123;&#123;lead.name&#125;&#125; etc.
+                    </p>
+                  </div>
+                )}
+
+                {/* Pré-visualização do retorno */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                  <Label className="text-[11px] font-semibold text-slate-700">
+                    Exemplo do retorno enviado para a requisição:
+                  </Label>
+                  <pre className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px] font-mono text-slate-700 overflow-x-auto">
+                    {responseMode === "n8n_raw"
+                      ? JSON.stringify({
+                          id: "12036340870798018@g.us",
+                          name: "SUPORTE VIP | Estevão Dutra",
+                          inviteLink: "https://chat.whatsapp.com/...",
+                          participants: ["5512982402981@c.us", "..."]
+                        }, null, 2)
+                      : responseMode === "group_data"
+                      ? JSON.stringify({
+                          success: true,
+                          groupId: "12036340870798018",
+                          groupJid: "12036340870798018@g.us",
+                          groupName: "SUPORTE VIP | Estevão Dutra",
+                          groupInviteLink: "https://chat.whatsapp.com/...",
+                          groupPhoto: "https://..."
+                        }, null, 2)
+                      : customJson}
+                  </pre>
                 </div>
               </div>
             );

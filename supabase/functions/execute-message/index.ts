@@ -3416,6 +3416,7 @@ Deno.serve(async (req) => {
                 inviteLink: inviteLink,
               };
               (triggerContext as any).group = (triggerContext as any).createdGroup;
+              (triggerContext as any).n8nResponse = zapiResult.details || (zapiResult as any).response || groupResp || {};
             }
 
             // Atualiza a instância ativa para este nó e seguintes
@@ -3440,6 +3441,70 @@ Deno.serve(async (req) => {
           });
 
           // Segue para a próxima conexão configurada
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
+        // ============= WEBHOOK RESPONSE NODE (Responder Requisição de Origem) =============
+        if (node.node_type === "webhook_response" || node.node_type === "respond_webhook") {
+          const nodeConfig = node.config || {};
+          const responseMode = (nodeConfig.responseMode as string) || "n8n_raw";
+          const statusCode = Number(nodeConfig.statusCode || 200);
+
+          console.log(`[ExecuteMessage] 📤 Executando nó de Resposta de Webhook (mode: ${responseMode}, status: ${statusCode})`);
+
+          let responseBody: any = null;
+
+          if (responseMode === "n8n_raw") {
+            // Repassar exatamente a informação recebida do N8N / criação de grupo
+            responseBody = (triggerContext as any)?.n8nResponse 
+              || (triggerContext as any)?.createdGroup 
+              || (triggerContext as any)?.lastNodeOutput 
+              || { success: true, message: "Fluxo executado com sucesso" };
+          } else if (responseMode === "group_data") {
+            const grp = (triggerContext as any)?.createdGroup || (triggerContext as any)?.group || {};
+            responseBody = {
+              success: true,
+              groupId: grp.id || grp.groupId || "",
+              groupJid: grp.jid || grp.groupJid || "",
+              groupName: grp.name || grp.groupName || "",
+              groupPhoto: grp.photoUrl || grp.photo_url || "",
+              groupInviteLink: grp.inviteLink || grp.invite_link || "",
+              group: grp,
+            };
+          } else if (responseMode === "custom_json") {
+            const rawJson = (nodeConfig.customJson as string) || "{}";
+            const replaced = replaceVariables(rawJson);
+            try {
+              responseBody = JSON.parse(replaced);
+            } catch {
+              responseBody = { raw: replaced };
+            }
+          }
+
+          // Grava a resposta customizada no triggerContext
+          if (triggerContext) {
+            (triggerContext as any).customResponse = {
+              status: statusCode,
+              body: responseBody,
+              mode: responseMode,
+              contentType: "application/json",
+            };
+          }
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: "success",
+            startedAt: nodeStartedAt,
+            input: { responseMode, statusCode },
+            output: { responseBody, statusCode },
+          });
+
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -6838,6 +6903,7 @@ Deno.serve(async (req) => {
         groupsProcessed: groups.length,
         totalTimeMs,
         createdGroup: (triggerContext as any)?.createdGroup || null,
+        customResponse: (triggerContext as any)?.customResponse || null,
         webhookResponses,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
