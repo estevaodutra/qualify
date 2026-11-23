@@ -289,6 +289,14 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload | any): P
       body = {
         groupName: config.name || config.groupName || "",
         phones: config.phones || [],
+        ...(config.photoUrl || config.image || config.picture ? {
+          photoUrl: config.photoUrl || config.image || config.picture,
+          image: config.photoUrl || config.image || config.picture,
+          picture: config.photoUrl || config.image || config.picture,
+        } : {}),
+        ...(config.description ? {
+          description: config.description,
+        } : {}),
       };
       break;
 
@@ -454,6 +462,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload | any): P
             try { retryData = JSON.parse(retryText); } catch { retryData = { raw: retryText }; }
             let norm = retryData;
             if (Array.isArray(retryData)) norm = retryData[0] || {};
+            if (!norm || typeof norm !== "object") norm = {};
             const rZaapId = norm.zaapId || norm.id || null;
             const rMsgId = norm.messageId || norm.id || null;
             const rWahaId = norm?.key?.id || null;
@@ -489,6 +498,9 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload | any): P
     let normalizedData = responseData;
     if (Array.isArray(responseData)) {
       normalizedData = responseData[0] || {};
+    }
+    if (!normalizedData || typeof normalizedData !== "object") {
+      normalizedData = {};
     }
 
     const zaapId = normalizedData.zaapId || normalizedData.id || null;

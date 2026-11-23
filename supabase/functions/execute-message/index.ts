@@ -3207,6 +3207,10 @@ Deno.serve(async (req) => {
             const createPayload = {
               groupName: finalGroupName,
               phones: resolvedPhones,
+              photoUrl: finalPhotoUrl || "",
+              image: finalPhotoUrl || "",
+              picture: finalPhotoUrl || "",
+              description: finalDescription || "",
             };
 
             const zapiResult = await sendWhatsAppMessage({
@@ -3244,7 +3248,14 @@ Deno.serve(async (req) => {
             }
 
             // Extrair o JID / ID do grupo retornado pela API
-            const groupResp = zapiResult.details || (zapiResult as any).response || {};
+            let groupResp = zapiResult.details || (zapiResult as any).response || {};
+            if (Array.isArray(groupResp)) {
+              groupResp = groupResp[0] || {};
+            }
+            if (!groupResp || typeof groupResp !== "object") {
+              groupResp = {};
+            }
+
             const createdJid = (
               groupResp.phone ||
               groupResp.groupId ||
@@ -3252,7 +3263,9 @@ Deno.serve(async (req) => {
               groupResp.id ||
               groupResp.jid ||
               groupResp.gid ||
-              (groupResp.data && (groupResp.data.phone || groupResp.data.id || groupResp.data.jid || groupResp.data.groupJid)) ||
+              groupResp.chatId ||
+              groupResp.chat?.id ||
+              (groupResp.data && (groupResp.data.phone || groupResp.data.id || groupResp.data.jid || groupResp.data.groupJid || groupResp.data.groupId)) ||
               ""
             ).toString();
 
